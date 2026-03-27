@@ -1,0 +1,22 @@
+Lối thoát số 1: Thay đổi chiến lược Trích xuất Đặc trưng
+Nếu tần số cao đã bị phá hủy, đừng tìm kiếm ở đó nữa. Cậu phải ép pipeline của mình nhìn vào những thứ JPEG không thể (hoặc ít) phá hủy:
+
+Chuyển trọng tâm sang Kênh Màu (Chroma channels): JPEG nén màu sắc (kênh Cb, Cr) mạnh hơn nén độ sáng (kênh Y) thông qua cơ chế 4:2:0 subsampling. Các mô hình Diffusion hiện tại rất kém trong việc duy trì sự tương quan vật lý giữa các kênh màu (cross-channel correlation). Hãy áp dụng ma trận GLCM trên các kênh màu Cb, Cr (hoặc không gian màu HSV) thay vì chỉ chạy trên ảnh xám (Grayscale). Dấu vết của AI ở các kênh màu thường sống sót tốt hơn qua nén JPEG.
+
+Khai thác phổ tần số trung bình (Mid-frequency band): Thay vì đo tổng năng lượng tần số cao, hãy chia phổ FFT thành các dải hình khuyên (concentric rings). Tính toán tỷ lệ phân bố năng lượng ở dải trung (Mid-band). Dải này chứa thông tin về kết cấu (texture) lớn hơn, ít bị thuật toán lượng tử hóa của JPEG làm phẳng.
+
+3. Lối thoát số 2: Mũi "Vaccine" Suy thoái (Degradation Suite)
+Đây chính là lý do Mục 5 trong đề cương Phase 1 của cậu tồn tại. Để mô hình GBDT/SVM của cậu không bị sốc nhiệt khi gặp ảnh thực tế, cậu phải "tiêm vaccine" cho nó ngay từ lúc huấn luyện:
+
+Không bao giờ train mô hình bằng 100% ảnh nguyên bản (Pristine Images). * Trong quá trình chuẩn bị dữ liệu (Data Loading), hãy áp dụng một pipeline suy thoái ngẫu nhiên (Random Degradation): 30% ảnh giữ nguyên, 40% ảnh bị nén JPEG ngẫu nhiên từ quality 60 đến 90, 30% ảnh bị resize down/up.
+
+Việc này ép thuật toán học máy (SVM/GBDT) phải tự động hạ trọng số (weight) của các đặc trưng tần số cao xuống, và tăng trọng số của các đặc trưng bền vững hơn.
+
+4. Lối thoát số 3: Quyền năng của vùng "MEDIUM" (Uncertainty)
+Hệ thống "Old but Good" là hệ thống biết giới hạn của mình. Cậu đã định nghĩa 3 vùng quyết định LOW - MEDIUM - HIGH trong file p0.txt. Đây là cứu cánh tuyệt vời nhất trên môi trường production.
+
+Mô hình SVM/GBDT kết hợp với Platt Scaling có khả năng xuất ra xác suất (Probability) rất chuẩn xác (calibrated score).
+
+Nếu một bức ảnh bị nén JPEG quá nát (có thể đo lường bằng việc ước lượng Q-factor của ảnh đầu vào), vector đặc trưng sẽ mờ nhạt, và điểm số AI-suspicion trả về sẽ loanh quanh ở mức 0.4 - 0.6.
+
+Thay vì ép mô hình đoán bừa rồi tạo ra False Negative (bỏ lọt ảnh giả) hay False Positive (giết nhầm ảnh thật), hệ thống sẽ gán cờ MEDIUM. Lúc này, theo đúng yêu cầu dự án, nó sẽ chuyển sang luồng "yêu cầu cung cấp ảnh gốc hoặc manual review". Đây chính là tư duy làm sản phẩm thực tế, không phải làm lab.

@@ -1,0 +1,55 @@
+
+
+### ĐẶC TẢ KỸ THUẬT: NHÓM 1 – ĐẶC TRƯNG PHỔ TẦN SỐ (FREQUENCY DOMAIN)
+
+**Mục tiêu:** Bắt giữ các dấu vết vi mô (micro-artifacts) và nhiễu chu kỳ (checkerboard artifacts) sinh ra từ quá trình upsampling của mạng nơ-ron (Diffusion/GAN), đồng thời miễn nhiễm với nội dung bức ảnh (độ sáng/tương phản) và chuẩn nén JPEG.
+
+**1. Input & Chuẩn hóa Tiền xử lý**
+
+* **Đầu vào:** Kênh Luma ($Y$) trích xuất từ mảng `ycbcr_npy` (kích thước $256 \times 256$, đã qua padding đối xứng, xô lệch lưới cắt tâm và chuẩn hóa nén JPEG In-memory).
+* **Kiểu dữ liệu:** Ép kiểu `np.float64` để đảm bảo độ chính xác tuyệt đối trong các phép biến đổi Fourier.
+* **Biến đổi cơ sở (Parseval Normalization):**
+
+$$F = \frac{\text{fft2}(Y)}{256 \times 256}, \quad P(u,v) = |\text{fftshift}(F)|^2$$
+
+
+
+*(Đảm bảo phổ năng lượng $P$ nằm ở scale chuẩn ~0.001 - 1.0, chống bùng nổ gradient).*
+
+**2. Trích xuất Đặc trưng (6 Dimensions)**
+
+* **Đặc trưng 1: FRS Mid-band Coefficient of Variation (`frs_mid_variance`)**
+* *Ý nghĩa:* Đo lường "độ gồ ghề" (spikes) nội tại của dải tần số trung bình, dấu hiệu đặc trưng của nhiễu chu kỳ AI.
+* *Công thức:* Tích phân năng lượng trung bình $E[r]$ trên các vòng tròn đồng tâm với bán kính $r \in [8, 32]$. Sử dụng Hệ số biến thiên (CV) để triệt tiêu thiên lệch do độ sáng tổng thể:
+
+$$\text{frs\_mid\_variance} = \frac{\text{Var}(\{E[8],\dots,E[32]\})}{\text{Mean}(\{E[8],\dots,E[32]\})^2 + 10^{-8}}$$
+
+
+
+
+* **Đặc trưng 2 & 3: 1D Power Spectrum Decay (`ps_alpha`, `ps_deviation_variance`)**
+* *Ý nghĩa:* Ảnh tự nhiên có phổ năng lượng suy giảm tuân theo quy luật $1/f^\alpha$. Ảnh AI giải mã từ latent space làm đường cong này bị lệch và dao động mạnh.
+* *Công thức:* Trích xuất phổ 1D $c(r)$ từ $P(u,v)$. Thực hiện hồi quy tuyến tính (Log-Log Fit) nghiêm ngặt trên dải $r \in [20, 64]$ (để né dải tần số thấp chứa nội dung và dải $>64$ bị thuật toán JPEG triệt tiêu):
+
+$$\log c(r) = -\alpha \cdot \log r + b$$
+
+
+* *Output:* Lấy $\alpha$ (độ dốc) và Variance của phần dư (Deviation) so với đường hồi quy. *(Lưu ý: Do tàn dư JPEG, $\alpha$ thực tế sẽ nằm trong khoảng 2.8 - 3.5 thay vì 2.0).*
+
+
+* **Đặc trưng 4, 5, 6: DCT Mid-Band Stats (`dct_mid_mean`, `dct_mid_variance`, `dct_mid_skewness`)**
+* *Ý nghĩa:* Đo lường đặc tính phân phối của các hệ số tần số trung bình trên lưới cục bộ $8 \times 8$.
+* *Công thức:* Tính DCT 2D cho từng block $8 \times 8$. Trích xuất các hệ số theo đường chéo Zigzag từ index 10 đến 40. Lấy bình phương biên độ $A = \text{coeffs}^2$. Tính Mean, Variance, và Skewness của $A$. (Skewness được bọc an toàn $\epsilon = 10^{-8}$ ở mẫu số để tránh lỗi `NaN` trên các vùng ảnh phẳng).
+* *Cảnh báo OOD (Red Flag):* Lưới DCT này trùng khớp 100% với lưới nén JPEG ở bước tiền xử lý. Do đó, tính năng này đo lường "độ phẳng cục bộ + tàn dư lượng tử hóa", không phải dấu vân tay AI thuần túy. Sẵn sàng loại bỏ (drop) nếu Feature Importance quá cao để tránh overfitting.
+
+
+
+**3. Tiêu chuẩn Triển khai (Reproducibility)**
+
+* Chỉ sử dụng Numpy/Scipy gốc.
+* Không sử dụng nội suy float cho bán kính ($r$), dùng tọa độ integer meshgrid (`np.hypot` trên dải $[-128, 127]$).
+* Giới hạn `r_max` được hardcode, không phụ thuộc vào kích thước động.
+
+---
+
+Thiết kế Nhóm 1 đã hoàn toàn đóng băng (locked). Chúng ta có thể chuyển sang thiết kế **Nhóm 2: Tương quan Màu sắc & Bất đồng nhất cục bộ (Local Color Inconsistency)** - nơi khai thác điểm yếu của kênh Chroma (Cr, Cb) trên các mô hình Diffusion. Bạn muốn bắt đầu thảo luận về ma trận hiệp phương sai chéo (Cross-covariance) hay tỷ lệ cửa sổ trượt (Sliding Window Ratio) trước?

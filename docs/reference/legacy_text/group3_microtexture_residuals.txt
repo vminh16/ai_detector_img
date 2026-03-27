@@ -1,0 +1,115 @@
+
+
+# BẢN ĐẶC TẢ KỸ THUẬT: NHÓM 3 – ĐẶC TRƯNG PHẦN DƯ VI MÔ VÀ KẾT CẤU (MICRO-TEXTURE RESIDUALS)
+
+## 1. Mục tiêu Khoa học
+
+Mục tiêu của nhóm đặc trưng này là định lượng các khiếm khuyết vi mô trong không gian sắc độ (Chroma) sinh ra bởi các mạng sinh ảnh (Diffusion/GAN). Cụ thể, hệ thống cô lập các nhiễu cấu trúc (structural noise) và mẫu chu kỳ (checkerboard artifacts) xuất phát từ các lớp giải mã (upsampling), đồng thời đảm bảo tính bất biến với nội dung không gian (spatial content) của bức ảnh.
+
+## 2. Đầu vào & Đầu ra (I/O Specification)
+
+* **Input:** Ma trận `ycbcr_npy` đa chiều kích thước $(256, 256, 3)$, không gian màu YCrCb chuẩn BT.601, định dạng số thực (`float64`).
+* **Hằng số tĩnh (Constants):**
+* `SRM_ENERGY_THRESHOLD = 1e-12`: Ngưỡng năng lượng tối thiểu để xác định tín hiệu phần dư.
+* `LBP_RADIUS = 1, LBP_POINTS = 8`: Tham số cửa sổ lân cận của LBP.
+
+
+* **Output:** Vector đặc trưng gồm **10 chiều (10 dims)**:
+```python
+{
+    # Advanced SRM (6 dims)
+    'srm_square3_mar_cr': float,      'srm_square3_energy_cr': float,
+    'srm_edge3_mar_cr': float,        'srm_edge3_energy_cr': float,
+    'srm_square5_mar_cr': float,      'srm_square5_energy_cr': float,
+
+    # Chroma LBP (4 dims)
+    'lbp_nonuniform_ratio_cr': float, 'lbp_entropy_cr': float,
+    'lbp_nonuniform_ratio_cb': float, 'lbp_entropy_cb': float
+}
+
+```
+
+
+
+---
+
+## 3. Advanced SRM (Spatial Rich Model)
+
+### 3.1. Cơ sở Toán học & Vật lý
+
+Các bộ lọc SRM là các bộ lọc thông cao (High-pass filters) tuyến tính. Bằng cách thiết kế tổng các hệ số (weights) của ma trận hạt nhân (kernel) bằng đúng $0$, phép tích chập sẽ triệt tiêu gần như hoàn toàn tín hiệu nội dung ảnh (đại lượng tần số thấp/trung bình), chỉ để lại tín hiệu phần dư (residual) chứa nhiễu tần số cao. Việc sử dụng đồng thời chuẩn L1 (MAR) và L2 (Energy) giúp hệ thống đo lường song song nhiễu nền vi mô và các xung đột biến biên độ.
+
+### 3.2. Cấu trúc Hạt nhân (Kernels)
+
+Sử dụng 3 bộ lọc kinh điển nhằm quét các hướng đạo hàm khác nhau :
+
+* **SQUARE3x3** (Đạo hàm không gian đa hướng):
+
+$$K_{sq3} = \begin{bmatrix} -1 & 2 & -1 \\ 2 & -4 & 2 \\ -1 & 2 & -1 \end{bmatrix}$$
+
+
+* **EDGE3x3** (Đạo hàm tập trung cạnh):
+
+$$K_{ed3} = \begin{bmatrix} 0 & -1 & 0 \\ -1 & 4 & -1 \\ 0 & -1 & 0 \end{bmatrix}$$
+
+
+* **SQUARE5x5** (Đạo hàm bậc cao mở rộng):
+
+$$K_{sq5} = \frac{1}{4} \begin{bmatrix} 0 & 0 & 1 & 0 & 0 \\ 0 & 0 & -2 & 0 & 0 \\ 1 & -2 & 4 & -2 & 1 \\ 0 & 0 & -2 & 0 & 0 \\ 0 & 0 & 1 & 0 & 0 \end{bmatrix}$$
+
+
+
+### 3.3. Thuật toán Trích xuất (Chỉ trên kênh Cr)
+
+1. **Dịch tâm:** $Cr' = Cr - 128$. (Khử độ chệch DC của kênh sai phân màu).
+2. **Tích chập (Convolution):** Thực hiện tích chập $Cr'$ với 3 hạt nhân trên.
+* *Ràng buộc cực đoan:* Bắt buộc dùng chế độ **`valid`** (không padding). Kết quả $R_{sq3}, R_{ed3}$ sẽ có kích thước $254 \times 254$; $R_{sq5}$ có kích thước $252 \times 252$.
+
+
+3. **Trích xuất Thống kê:** Trên từng phần dư hợp lệ $R$ (số lượng phần tử là $N$):
+* **Energy (L2-Norm):** $E = \frac{1}{N}\sum R^2$
+* **Vệ binh OOD:** Nếu $E < 10^{-12}$, gán $MAR = 0.0$ và $E = 0.0$ (Tiết kiệm tính toán và chống rác số học).
+* **MAR (L1-Norm):** Nếu hợp lệ, tính $MAR = \frac{1}{N}\sum |R|$
+
+
+
+### 3.4. Phân tích Edge Case
+
+* **Padding Artifact Trap:** Chế độ `valid` ngăn chặn hiện tượng giả đạo hàm tại viền ảnh. Nếu dùng padding (zero/reflect), bộ lọc thông cao sẽ phản ứng với nếp gấp nhân tạo này, tạo ra năng lượng ảo khổng lồ làm sai lệch kết quả đánh giá toàn cục.
+* **Thay thế Variance bằng Energy:** Vì $\mu_R \approx 0$ (do hạt nhân có tổng bằng 0), Variance và Energy gần như đồng nhất. Sử dụng Energy trực tiếp làm giảm thiểu số lượng phép toán dấu phẩy động, tăng tốc CPU, và triệt tiêu rủi ro trừ sai số (underflow).
+
+---
+
+## 4. Chroma LBP (Local Binary Patterns)
+
+### 4.1. Cơ sở Toán học & Vật lý
+
+LBP đo lường sự thay đổi kết cấu vi mô cục bộ . Thuật toán được thiết lập ở chế độ *Rotation-Variant* (Bất biến hướng bị vô hiệu hóa) nhằm bảo toàn các phương hướng trục ngang/dọc (Axis-aligned). Điều này cực kỳ quan trọng vì mạng nơ-ron sinh ảnh thường để lại nhiễu ô vuông do bản chất toán học của các lớp biến đổi nhân ma trận (matrix multiplication) 2D.
+
+### 4.2. Thuật toán Trích xuất (Trên kênh Cr và Cb)
+
+1. **Ép kiểu Số nguyên (Integer Cast):**
+* $Cr_{int} = \text{round}(Cr).\text{astype}(\text{np.int32})$
+* $Cb_{int} = \text{round}(Cb).\text{astype}(\text{np.int32})$
+
+
+2. **Vệ binh OOD Siêu tốc:** Kiểm tra Khoảng biến thiên (Peak-to-Peak). Nếu $C_{int}.\text{ptp}() == 0$, lập tức gán `lbp_nonuniform_ratio = 0.0` và `lbp_entropy = 0.0`.
+3. **Mã hóa LBP:** Áp dụng thuật toán LBP (Radius=1, Points=8) trên vùng lõi (loại bỏ 1 pixel viền để tránh nhiễu biên).
+4. **Ánh xạ Đồng nhất (Uniform Mapping):** Dùng Bảng tra cứu (LUT) 256 chuyển đổi các mã LBP sang 59 bins (58 bins đồng nhất + 1 bin dị thường).
+5. **Trích xuất Thống kê:** Từ Biểu đồ Histogram ($p_i$ là xác suất chuẩn hóa):
+* **Non-uniformity Ratio:** $p_{58}$ (Tỷ lệ pixel có kết cấu chuyển bậc liên tục).
+* **Entropy:** $H = -\sum_{p_i > 0} p_i \log_2(p_i)$ (Sự hỗn loạn của các mẫu cục bộ).
+
+
+
+### 4.3. Phân tích Edge Case
+
+* **Floating-Point Step Trap:** Hàm bước nhảy Heaviside của LBP cực kỳ nhạy cảm với sai số dấu phẩy động chuẩn IEEE 754. Bước ép kiểu sang số nguyên (`round.astype(int32)`) là lá chắn thép ngăn chặn các vùng màu phẳng quang học bị "băm nát" thành các mẫu Non-uniform ảo do sai số ở chữ số thập phân thứ 15.
+* **Bẫy $\log_2(0)$:** Công thức Entropy bọc điều kiện $p_i > 0$ bảo vệ hệ thống khỏi lỗi sập toán học `NaN` trên các bức ảnh AI bị làm mượt quá mức (chứa nhiều bins rỗng). Việc không cộng thêm $\epsilon$ vào logarit giữ cho giá trị Entropy tinh khiết tuyệt đối.
+
+---
+
+## 5. Sổ tay Giới hạn Vật lý (OOD Red Flags & Trade-offs)
+
+* **Hiện tượng Sentinel Clustering:** Trên các vùng ảnh hoặc toàn bộ bức ảnh bị mượt hóa (over-smoothed) hoặc không chứa thông tin sắc độ quang học, tính năng sẽ đồng loạt hội tụ về `0.0`. Đây là phản ánh trung thực của vật lý tín hiệu, hệ thống Học máy (đặc biệt là dạng Cây quyết định) cần được tinh chỉnh để học đặc điểm "vắng mặt tín hiệu" này như một Node phân nhánh hợp lệ.
+* **Sự Đảo ngược Tín hiệu (JPEG Grid Inversion):** LBP (bán kính 1) có thể phản ứng với ranh giới của các khối nén JPEG 8x8 (Blocking artifacts). Trên ảnh AI bị làm mịn, cấu trúc duy nhất còn lại là lưới nén JPEG, khiến tỷ lệ *Non-uniformity* tăng đột biến (trái với logic thông thường là ảnh mịn thì tỷ lệ thấp). Hệ thống suy luận cần được thiết kế (hoặc huấn luyện đủ bao quát) để nắm bắt hàm ý phi tuyến tính này.

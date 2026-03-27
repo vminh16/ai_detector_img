@@ -1,0 +1,218 @@
+Dataset chính (train/val):
+
+1) Danh sách Dataset & Đánh giá tổng quát
+
+1.1 Dataset chính (In-Domain Train/Val/Test):
+
+Tên: GenIMG (Subset).
+
+License: Research-only.
+
+Vai trò: Huấn luyện (Train), Tinh chỉnh siêu tham số (Val), và Kiểm thử nội bộ (ID Test).
+
+Real source: ImageNet (Chỉ sử dụng tập con các nhãn/WordNet ID được dùng làm prompt sinh ảnh FAKE, đảm bảo đối xứng phổ tần số tuyệt đối).
+
+Generator list (5 ID Generators): Midjourney, Stable Diffusion v1.4, ADM, Wukong, VQDM.
+
+1.2 Dataset test phụ (external / robustness / OOD):
+
+① GenImage OOD (~12k ảnh): Sử dụng SDv1.5 (Đánh giá khả năng khái quát hóa nội bộ họ kiến trúc - Intra-family generalization) và GLIDE (Đánh giá chéo kiến trúc - Cross-architecture).
+
+② AIGIBench (~25k ảnh): Đánh giá độ bền bỉ đa công cụ. (Áp dụng Stratified Random Sampling: Giới hạn ngân sách tối đa 1.000 ảnh/generator x 25 generators để khả thi với phần cứng hiện tại).
+
+③ COCOFake (~20k ảnh): Đánh giá hiện tượng trượt miền ngữ nghĩa (Semantic Domain Shift). Real source: MS-COCO. Fake source: Ảnh sinh bằng Stable Diffusion từ chính caption của tập MS-COCO.
+
+④ CIFAKE (~20k ảnh): Stress-test trên điều kiện độ phân giải cực thấp (32x32 pixel).
+
+1.3 tóm tắt
+┌─────────────────────────────────────────────┐
+│  TRAIN + VAL (GenImage only)                        │
+│  60k images = 30k REAL + 30k FAKE                   │
+│  5 ID generators × 6k/gen                           │
+│  Split: 48k train / 6k val / 6k test                        │
+├─────────────────────────────────────────────────────┤
+│  EVALUATION SUITE                                   │
+│                                                     │
+│  ① GenImage OOD   →  ~12k (SDv1.5 + GLIDE)         │
+│  ② AIGIBench      → ~25k (full, 25 generators sub sampling 1k sample per generator, )    │
+│  ③ COCOFake       →  ~20k (10k fake + 10k COCO)    │
+│  ④ CIFAKE         →  ~20k (full test set)           │
+│                                                     │
+│  Total eval: ~57k images                           │
+└─────────────────────────────────────────────────────┘
+2 generators hold-out (OOD test):
+
+SDv1.5 — cùng họ Stable Diffusion với SDv1.4, test xem model có generalize được trong cùng family không
+GLIDE — diffusion 256² nhưng architecture khác ADM/VQDM, test cross-architecture
+
+2) Bảng thống kê dữ liệu (bắt buộc)
+
+2.1 Quy ước lớp:
+
+REAL (Lớp 0): Ảnh chụp vật lý nguyên bản từ tập ImageNet, được lưu trữ trong thư mục nature của GenIMG.
+
+FAKE (Lớp 1): Ảnh sinh tạo thuần túy bằng kiến trúc Khuếch tán (Diffusion Models). Loại bỏ hoàn toàn kiến trúc GAN (BigGAN) khỏi Pipeline để khóa chặt đặc trưng phân phối nhiễu.
+
+2.2 Thống kê định lượng (điền bảng):
+
+#images per class: REAL 30k | FAKE 30k
+
+Theo generator: (generator_i:  ảnh) 
+5 ID generators × 6,000 ảnh/generator:
+• Midjourney: 6k
+• Stable Diffusion 1.4: 6k
+• ADM: 6k
+• Wukong: 6k
+ VQDM: 6k 
+
+Theo real-source/domain: (source_j: ____ ảnh)   ImageNet
+
+Resolution (min/median/max): ____ / ____ / ____
+
+File format (%PNG/%JPG/%WEBP…): ____
+
+JPEG quality distribution (nếu có/ước lượng): mô tả ____ + cách đo ____
+
+3) Protocol split để đánh giá tổng quát (bắt buộc)
+
+3.1 In-domain split (ID):
+
+Định nghĩa “in-domain”: Tập dữ liệu kiểm thử (Test) có cùng phân phối (distribution) về cả nhãn thật (ImageNet) và kiến trúc tạo sinh (5 ID generators) so với tập huấn luyện (Train).
+
+Unit split (ảnh / cluster / (prompt,seed) / source): ImageNet Class (Nhãn ImageNet), Tuyệt đối không chia theo ảnh (Image-level).
+
+Tỉ lệ phân bổ (60k ảnh): 48k Train / 6k Val / 6k ID Test.
+
+Stratify theo: ☑ generator ☐ real-source ☑ content ☐ resolution ☐ khác ____
+
+3.2 Cross-generator split (unseen generator):
+
+Danh sách generator giữ-out hoàn toàn: SDv1.5, GLIDE
+
+Cách tạo folds (leave-one-out / leave-family-out): Hold-out Test Sets (Giao thức: Intra-family cho SDv1.5 và Cross-architecture cho GLIDE)
+
+Quy tắc cấm leakage (prompt/seed/cluster): Các prompt/class dùng để sinh ảnh trong tập Cross-generator Test tuyệt đối không được trùng lặp (non-overlapping) với tập các prompt/class đã dùng trong tập Train/Val
+
+3.3 Cross-domain real (khuyến nghị):
+
+Real-domain giữ-out: COCO, COCO không nằm ở train, không overlap với COCOFake
+
+Giữ cố định generator nào ở phía fake:  Stable Diffusion. (Lý do: Bộ COCOFake dùng SD để tạo ảnh từ caption của tập COCO
+
+Metric/báo cáo: False Positive Rate (FPR) ở ngưỡng True Positive Rate (TPR) = 95%
+
+3.4 AI-suspicion score & calibration:
+
+Định nghĩa score: Xác suất có điều kiện P(y=1|x) được xuất ra từ mô hình ML (SVM/GBDT) sau khi đã chạy qua hàm hiệu chuẩn (Calibration function)
+
+Có calibration set riêng? ☑ Có ☐ Không
+
+Nguồn gốc: Trích xuất ngẫu nhiên 3.000 ảnh (5%) từ tập Train 48k để tạo Calibration Set độc lập. Tuyệt đối không sử dụng tập Val 6k (đã dùng để tuning hyperparameter) để fit Platt Scaling, nhằm tránh nghịch lý Double-Dipping.
+
+
+4) Preprocessing v0.1 (đối xứng real/fake)
+
+4.1 Decode & color:
+
+Color space target: YCbCr
+
+Lý do: Tách biệt kênh độ sáng (Y) và kênh màu sắc (Cb, Cr). Trọng tâm trích xuất đặc trưng sẽ nhắm vào kênh Cb và Cr để khai thác các bất thường về sự rò rỉ màu (color bleeding) của AI sinh tạo, đồng thời tăng tính bền bỉ trước thuật toán nén JPEG subsampling (giả thiết)
+
+EXIF/orientation: ☐ giữ ☑ normalize (mô tả) Đọc cờ định hướng (orientation flag) trong EXIF để xoay ảnh (rotate) về đúng chiều vật lý trước khi cắt crop, sau đó xóa cờ này đi. Lý do: Nếu không xoay đúng chiều, ma trận GLCM (vốn nhạy cảm với hướng không gian) sẽ tính toán sai lệch cấu trúc giữa ảnh thật (thường có EXIF xoay) và ảnh FAKE (không có EXIF xoay)
+
+Metadata: ☐ giữ ☑ strip toàn bộ (lý do) Ảnh thật chụp bằng điện thoại luôn chứa vô số siêu dữ liệu (loại máy ảnh, ISO, tiêu cự, GPS). Ảnh AI sinh ra thường trống trơn hoặc có dòng chữ "Software: Stable Diffusion". Nếu không gạt bỏ (strip) toàn bộ thông tin này ở bước đọc file, hệ thống sẽ vấp phải "shortcut learning" nghiêm trọng nhất.
+
+Thư viện giải mã (Decode Library): Bắt buộc sử dụng OpenCV (cv2) phiên bản 4.x (Cụ thể dùng cv2.imread với cờ cv2.IMREAD_COLOR).
+
+Lý do khóa thư viện: OpenCV đọc ảnh dưới dạng mảng NumPy nguyên bản cực kỳ nhanh và không tự động áp dụng các phép biến đổi màu ẩn (under-the-hood) như một số phiên bản của thư viện PIL (Pillow).
+
+Độ sâu bit (Bit-depth): Bắt buộc ép kiểu về uint8 (8-bit unsigned integer, dải giá trị từ 0 đến 255) cho mỗi kênh màu tại bước tiền xử lý cơ sở.
+
+Lý do: Ma trận GLCM đếm tần suất xuất hiện của các cặp giá trị pixel. Không gian GLCM sẽ bị phình to khi 16bit hoặc float32 khiến cho việc tính toán khó khăn. Việc đồng nhất uint8 đảm bảo ma trận GLCM luôn bị giới hạn ở kích thước 256x256 bins.
+
+Xử lý Gamma / ICC Profile / sRGB: Bắt buộc Strip (Gỡ bỏ/Bỏ qua) toàn bộ các Embedded Color Profiles (ICC) như Adobe RGB, Display P3 có sẵn trong ảnh thật. Mặc định đọc các giá trị pixel thô (Raw pixel values) dưới giả định chúng đều thuộc không gian sRGB tiêu chuẩn chưa hiệu chỉnh gamma tuyến tính.
+
+Lý do chống Shortcut: Ảnh thật chụp bằng iPhone/Android hiện nay thường nhúng profile màu Display P3. Trong khi đó, ảnh AI sinh ra từ Stable Diffusion hay Midjourney thường không có ICC Profile hoặc chỉ dùng sRGB mặc định. Nếu để thư viện đọc ảnh tự động render màu theo ICC Profile, sự chênh lệch (bias) về cường độ màu sẽ xảy ra. Khi đó, mô hình không học cách phát hiện AI, mà nó đi học cách phát hiện "Ảnh nào có profile Display P3 thì là REAL".
+
+Color space target: Chuyển đổi từ không gian BGR (mặc định của OpenCV) sang YCrCb bằng công thức tĩnh: cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb).
+
+Lý do: Dùng một công thức tĩnh của hệ ITU-R BT.601 (được OpenCV áp dụng mặc định) để đảm bảo các trọng số (weights) khi nhân ma trận màu là cố định tuyệt đối cho toàn bộ 60k ảnh. Trọng tâm trích xuất đặc trưng nằm ở kênh Cr và Cb.
+
+4.2 Resize/crop:
+
+Phương pháp: Patch-based Center Crop (Cắt vùng trung tâm).
+
+Lý do: Tránh sử dụng phép nội suy (interpolation) của hàm resize để bảo toàn nguyên vẹn năng lượng phổ tần số cao (nhiễu diffusion) và tối ưu chi phí tính toán cho ma trận GLCM. y. đây là một rủi ro (risk) vào báo cáo và lý giải sự đánh đổi (trade-off) giữa tốc độ tính toán GLCM  và việc mất thông tin biên
+
+Target size: 256x256 pixel.
+
+Policy: ☐ keep-ratio+pad ☑ crop ☐ khác ____
+
+Deterministic? ☑ Có ☐ Không (seed/logic) Cắt chính xác từ tâm bức ảnh dựa trên tọa độ toán học: (width/2 - 128, height/2 - 128)". Việc này đảm bảo tính tất định (deterministic), bất kỳ ai chạy lại script  trên cùng một tập ảnh cũng phải ra chính xác mảng NumPy đó.
+
+4.3 Format & recompress:
+
+Output format: Mảng NumPy lưu trong bộ nhớ (In-memory NumPy arrays) hoặc tệp .npy
+
+Recompress chuẩn hóa? ☐ Có ☑ Không
+
+Lý do: Tuyệt đối không lưu các patch 256x256 này dưới dạng JPEG/JPG xuống ổ cứng thêm một lần nữa. Mọi biến dạng JPEG phải được đẩy sang Mục 5 (Degradation Suite) để làm bài test, không được xuất hiện ở bước tiền xử lý cơ sở.
+
+4.4 “Symmetry audit checklist” (tick):
+
+☑ cùng pipeline cho cả 2 lớp
+
+☑ cùng thư viện/phiên bản
+
+☑ cùng tham số
+
+☑ không dùng metadata để quyết định transform
+
+☑ ghi log mọi bước vào manifest
+
+5) Degradation suite v0.1 (test robustness)
+
+Liệt kê từng biến dạng + grid tham số + thứ tự áp dụng:
+
+JPEG: Q = ____ ; recompress lần = ____
+
+Resize: scale factors = ____ ; interpolation = ____
+
+Blur: type ____ ; sigma = ____
+
+Noise: type ____ ; level = ____
+
+Recapture/screenshot sim: pipeline ____
+
+Khác: ____
+Báo cáo: metric theo (generator × degradation) ____
+
+6) Risk register (bắt buộc)
+
+Bảng (Risk | Mô tả | Cách phát hiện | Mitigation | Residual risk):
+
+Leakage theo prompt/seed/cluster: ____
+
+Duplicates/near-duplicates giữa splits: ____
+
+Metadata bias / EXIF / ICC: ____
+
+Compression bias (PNG vs JPEG): ____
+
+Watermark/text overlay shortcut: ____
+
+Prompt/curation bias: ____
+
+Domain shift real-source: ____
+
+7) Data loading rules (bắt buộc)
+
+Manifest schema (id, label, dataset, source, generator, version, prompt, seed, preprocess_tag, degradation_tag, hash…): ____
+
+Dedup rule: method ____ ; threshold ____ ; stage (trước split/sau split) ____
+
+Quy tắc chặn trùng train/test: ____
+
+Provenance tracking & hashing: ____
+
+Versioning dữ liệu (snapshot date, checksum): ____

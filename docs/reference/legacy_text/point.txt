@@ -1,0 +1,55 @@
+A) Đề cương báo cáo (khung chuẩn để bảo vệ)
+Tóm tắt (Abstract)
+Bài toán: phân loại ảnh thật vs ảnh sinh (diffusion) và xuất AI-suspicion score
+Đóng góp: pipeline tiền xử lý–đặc trưng–mô hình ML nhẹ; đánh giá cross-generator + robustness
+
+Giới thiệu (Introduction)
+Động cơ ứng dụng: kiểm định nội dung, moderation, forensics
+Thách thức: generalization, ảnh bị nén/resize, “shortcut learning”
+
+Bài toán & tiêu chí ứng dụng (Problem definition)
+
+Định nghĩa input/output (score, ngưỡng quyết định)
+
+Kịch bản sử dụng (use-cases) và chi phí FP/FN
+Dữ liệu & giao thức đánh giá (Datasets & Protocol)
+Dataset chính, tập train/val/test
+Cách split để tránh leakage (theo generator/nguồn)
+Bộ kiểm tra degrade (JPEG/resize/blur/recapture)
+
+Tiền xử lý & chuẩn hóa (Preprocessing)
+Chuẩn hóa kích thước/định dạng
+Thiết kế degradation suite (đối xứng real/fake)
+
+Trích xuất đặc trưng (Feature engineering)
+Nhóm thống kê không gian (noise/sharpness/contrast/…)
+Nhóm miền tần số (FFT/DCT energy profile, high–low ratio, histogram hệ số)
+Nhóm texture/co-occurrence (ACF/GLCM/patch stats)
+
+Mô hình & hiệu chỉnh score (Modeling & calibration)
+Baseline (LogReg/SVM/GBDT)
+Chuẩn hóa feature, chọn mô hình, calibration (Platt/Isotonic)
+Giải thích (feature importance, ablation)
+Thực nghiệm (Experiments)
+In-domain vs cross-generator
+Robustness theo từng mức degrade
+Metrics: ROC-AUC, PR-AUC, F1, ECE (calibration), confusion theo ngưỡng
+Phân tích lỗi (Error analysis)
+Case study FP/FN điển hình
+Phân tích theo loại cảnh/nội dung/mức nén
+
+Triển khai ứng dụng (Deployment)
+API: /predict trả score + lý do (top features)
+Hiệu năng: latency, footprint, batch/stream
+Giới hạn & rủi ro (Limitations & risks)
+Dễ lỗi với generator mới / domain mới
+Khuyến nghị “uncertain zone”, không kết luận tuyệt đối
+
+Kết luận & hướng phát triển (Conclusion & future work)
+Phụ lục
+
+Bảng dataset, license, thống kê lớp
+
+Danh sách feature + định nghĩa
+
+Thông số thí nghiệm

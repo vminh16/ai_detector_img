@@ -1,0 +1,32 @@
+## Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+## Notebooks
+.ipynb_checkpoints/
+
+## Local environments
+.venv/
+.venv-1/
+
+## Generated audit artifacts
+audit_output/data_audit/
+audit_output/studies/
+audit_output/validation/
+!audit_output/README.md
+
+## Generated data artifacts
+data/raw/
+data/raw_cleaned_v1/
+data/processed/
+data/processed_v4_rgb248_r4_exact/
+!data/README.md
+
+## Generated feature tables
+features/*
+!features/README.md
+
+## Generated model artifacts
+models/03_artifacts/
+!models/README.md

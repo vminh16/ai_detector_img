@@ -1,0 +1,67 @@
+1) Problem statement
+
+Xây dựng hệ thống nhận ảnh tĩnh và trả ra AI-suspicion score cho mục tiêu phân biệt ảnh thật và ảnh sinh bởi diffusion, phục vụ quy trình gắn cờ/kiểm duyệt. Ưu tiên generalization: thành công phải đạt trên OOD unseen real-domain theo platform, in-domain chỉ là phụ.
+
+2) Output definition
+
+Output: score ∈ [0,1] (calibrated), zone ∈ {LOW, MEDIUM, HIGH}.
+
+3 vùng quyết định:
+
+LOW: auto-pass
+
+MEDIUM: yêu cầu cung cấp ảnh gốc hoặc chuyển manual review
+
+HIGH: flag bắt buộc review/chặn tạm tùy use-case
+
+Calibration requirement: đánh giá cả in-domain và OOD, ECE ≤ 0.05, Brier ≤ 0.1, reliability plot 10 bins.
+
+3) Use-cases (2–3)
+
+UC1: pre-filter kiểm duyệt (flag HIGH/MEDIUM, LOW auto-pass)
+
+UC2: cảnh báo “khả năng do AI tạo” ở mức UX (dùng score đã hiệu chỉnh)
+
+UC3: lọc dữ liệu thu thập để loại ảnh AI khỏi tập “real”
+
+4) Cost of errors
+
+Ưu tiên giảm FN (AI bị coi là REAL) vì rủi ro lọt nội dung AI; chấp nhận FP ở mức kiểm soát bằng MEDIUM/manual review.
+
+5) Constraints
+
+Input: ảnh JPG/PNG/WebP; preprocess cố định, không dùng metadata/EXIF/watermark.
+
+Domain trục chính: platform (định nghĩa platform cụ thể trong data plan).
+
+MEDIUM: có cơ chế “ảnh gốc hoặc manual review”; cần owner + SLA cho demo.
+
+6) Success metrics (metric chính + ngưỡng)
+
+Metric chính (operating point):
+
+FPR ≤ 5% đo trên OOD REAL (platform chưa thấy trong train)
+
+TPR ≥ 95% đo trên AI test gồm cả in-domain AI và unseen-generator AI
+
+Metric phụ:
+
+ROC-AUC/PR-AUC báo cáo tham khảo
+
+Calibration: ECE/Brier + reliability plot (10 bins) trên in-domain và OOD
+
+Breakdown bắt buộc: theo generator, theo prompt-family, theo platform.
+
+7) Threats & limitations
+
+Domain shift theo platform, nén/re-encode, thay đổi pipeline resize.
+
+Shortcut learning theo watermark/metadata/nguồn: giảm bằng pixel-only, split theo platform/generator, breakdown theo biến đổi.
+
+8) Acceptance criteria (đủ demo)
+
+Có pipeline chạy được: input ảnh → trả score/zone ổn định.
+
+Đạt ngưỡng FPR/TPR và calibration như mục 6.
+
+Demo UC1 với luồng LOW/MEDIUM/HIGH; MEDIUM có owner + SLA.

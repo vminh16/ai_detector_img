@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Image Detector</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <!-- Top bar -->
+  <nav class="topbar">
+    <div class="topbar-brand">
+      <span class="logo">🔍</span>
+      <h1>AI Image Detector</h1>
+    </div>
+    <div class="topbar-status">
+      <span class="status-dot online"></span>
+      <span class="status-text">Pipeline ready</span>
+    </div>
+  </nav>
+
+  <!-- Main two-panel layout -->
+  <main class="panels">
+
+    <!-- ══ LEFT: Upload + Preview ══ -->
+    <section class="panel panel-left">
+
+      <!-- Drop zone -->
+      <div id="dropZone" class="drop-zone">
+        <div class="drop-zone-inner">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="drop-text">Drag & drop image here</p>
+          <p class="drop-hint">or click to browse</p>
+          <p class="drop-formats">JPEG, PNG, WebP &middot; max 20 MB</p>
+        </div>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
+      </div>
+
+      <!-- Preview (replaces drop zone after file chosen) -->
+      <div id="previewSection" class="preview-section hidden">
+        <div class="preview-card">
+          <img id="previewImage" alt="Preview">
+        </div>
+        <div class="preview-bar">
+          <div class="preview-info">
+            <span id="fileName" class="fname"></span>
+            <span id="fileSize" class="fsize"></span>
+          </div>
+          <div class="preview-actions">
+            <button id="changeBtn" class="btn-icon" title="Remove">✕</button>
+            <button id="analyzeBtn" class="btn-analyze">
+              <span class="btn-text">Analyze</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ══ RIGHT: Results ══ -->
+    <section class="panel panel-right">
+
+      <!-- Placeholder -->
+      <div id="placeholderSection" class="placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="ph-icon">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+        <p>Upload and analyze an image<br>to see results here</p>
+      </div>
+
+      <!-- Result -->
+      <div id="resultSection" class="result-section hidden">
+
+        <!-- Row 1: Gauge + Verdict -->
+        <div class="result-top">
+          <div class="gauge-box">
+            <svg class="gauge" viewBox="0 0 200 120">
+              <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100"/>
+              <path id="gaugeArc" class="gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100"/>
+            </svg>
+            <div class="gauge-label">
+              <span id="scoreValue" class="score-value">—</span>
+              <span class="score-unit">/ 1.00</span>
+            </div>
+          </div>
+          <div id="verdictCard" class="verdict-card">
+            <div class="verdict-head">
+              <span class="verdict-icon" id="verdictIcon"></span>
+              <h3 id="verdictLabel"></h3>
+            </div>
+            <p id="verdictDesc"></p>
+            <span id="elapsedTime" class="elapsed-badge"></span>
+          </div>
+        </div>
+
+        <!-- Row 2: Detail chips -->
+        <div class="detail-row">
+          <div class="chip"><span class="chip-label">Zone</span><span id="zoneValue" class="chip-val badge"></span></div>
+          <div class="chip"><span class="chip-label">Decision</span><span id="decisionValue" class="chip-val"></span></div>
+          <div class="chip"><span class="chip-label">Raw Score</span><span id="rawScoreValue" class="chip-val mono"></span></div>
+          <div class="chip"><span class="chip-label">Format</span><span id="formatValue" class="chip-val"></span></div>
+        </div>
+
+        <!-- Row 3: Contributors + Integrity -->
+        <div class="result-bottom">
+          <div class="contrib-box">
+            <h4>Top Feature Contributors</h4>
+            <div id="contributorsList" class="contrib-list"></div>
+          </div>
+          <div class="integrity-box">
+            <h4>Data Integrity</h4>
+            <div class="integrity-grid">
+              <div><span class="ig-label">Client</span><code id="clientHash"></code></div>
+              <div><span class="ig-label">Server</span><code id="serverHash"></code></div>
+              <div><span class="ig-label">Status</span><span id="hashMatch"></span></div>
+            </div>
+            <button id="resetBtn" class="btn-reset">Analyze Another</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div id="errorSection" class="error-section hidden">
+        <div class="error-card">
+          <span class="error-icon">⚠️</span>
+          <p id="errorMessage"></p>
+          <button id="errorResetBtn" class="btn-reset">Try Again</button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

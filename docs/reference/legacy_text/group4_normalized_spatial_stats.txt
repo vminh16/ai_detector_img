@@ -1,0 +1,134 @@
+==
+
+# BẢN ĐẶC TẢ KỸ THUẬT: NHÓM 4 – THỐNG KÊ KHÔNG GIAN CHUẨN HÓA
+
+## 1. Triết lý Thiết kế & Giới hạn Khoa học
+
+* **Mục tiêu:** Hệ thống trích xuất đặc trưng cấu trúc tương đối. Nhóm 4 không đo lường biên độ nhiễu tuyệt đối mà khai thác **sự phân bố bất đối xứng** và **tỷ lệ nhiễu nội bộ** nhằm *giảm thiểu sự phụ thuộc (mitigate dependence)* vào mức độ nén tổng thể của JPEG.
+* **Giả thuyết Thực nghiệm (Empirical Hypothesis):** Các đặc trưng Skewness và Kurtosis dựa trên giả thuyết thực nghiệm rằng: tàn dư nhiễu của ảnh quang học (chịu ảnh hưởng bởi Shot noise, Demosaicing, JPEG ringing) có phân phối gần với Gaussian hơn so với tàn dư nhiễu có cấu trúc (Structured artifacts, Checkerboard) từ quá trình giải mã Latent Space của AI.
+* **Tính Thích nghi Nội bộ (Intra-image Relativity):** Chấp nhận đánh đổi khả năng so sánh tuyệt đối giữa các ảnh (Inter-image comparability) để lấy sự ổn định cấu trúc cục bộ bên trong từng bức ảnh.
+
+## 2. Đầu vào & Hằng số Toàn cục (Global I/O & Constants)
+
+* **Đầu vào chung:** Ma trận `ycbcr_npy` đa chiều kích thước $(256, 256, 3)$, không gian màu YCrCb chuẩn BT.601, định dạng số thực `float64`.
+* **Đầu ra:** Cấu trúc từ điển (Dictionary) chứa 8 chiều đặc trưng (Dimensions).
+* **Hằng số Thuật toán:**
+* `MIN_GRAD_EDGE = 15.0`: Ngưỡng gradient vật lý tối thiểu cho cấu trúc viền.
+* `MAX_GRAD_FLAT = 3.0`: Ngưỡng gradient vật lý tối đa cho vùng phẳng.
+* `NOISE_FLOOR = 1e-3`: Hằng số nhiễu sàn (Laplace Smoothing Equivalent) để kẹp tỷ lệ, chống phân kỳ.
+
+
+
+---
+
+## 3. Đặc tả Toán học Hệ Đặc trưng (8 Dimensions)
+
+### 3.1. Chuẩn hóa SNR Không gian (`spatial_snr_ratio` - 1 Dim)
+
+**Cơ sở DSP:** Tách biệt hoàn toàn vai trò của "Bộ định vị" (Đạo hàm bậc 1) và "Bộ đo lường" (Đạo hàm bậc 2) để triệt tiêu Content Bias (Sự thiên lệch do nội dung). Đồng bộ kích thước bằng chế độ `valid` để chống Padding Artifacts.
+
+**Thuật toán:**
+
+1. **Định vị (Routing):** Áp dụng tích chập Sobel $3 \times 3$ trên kênh $Y$ với `mode='valid'`.
+Tính ma trận Gradient $G = \sqrt{G_x^2 + G_y^2}$. Kích thước thu được: $(254, 254)$.
+2. **Đo lường (Measuring):** Áp dụng hạt nhân thông cao `SQUARE3x3` lên kênh $Y$ với `mode='valid'`.
+Thu được ma trận phần dư $R_Y$. Kích thước: $(254, 254)$.
+3. **Phân vùng Kép (Dual-Thresholding):**
+* $T_{edge} = \max(\text{percentile}(G, 90), \ \text{MIN\_GRAD\_EDGE})$
+* $T_{flat} = \min(\text{percentile}(G, 30), \ \text{MAX\_GRAD\_FLAT})$
+* Tạo mặt nạ nhị phân: $M_{edge} = (G \ge T_{edge})$ và $M_{flat} = (G \le T_{flat})$.
+
+
+4. **Tính toán Đặc trưng:**
+Tính trung bình năng lượng nhiễu trên hai vùng:
+
+$$V_{edge} = \text{mean}(|R_Y|[M_{edge}])$$
+
+
+$$V_{flat} = \text{mean}(|R_Y|[M_{flat}])$$
+
+
+5. **Output & Kiểm soát Vùng Giá trị:**
+* *Guard:* Nếu không có pixel nào thỏa mãn $M_{edge}$, trả về `np.nan`.
+* *Công thức:* Sử dụng hàm Logarit cơ số 10 kết hợp nhiễu sàn $c = \text{NOISE\_FLOOR}$ để nén dải động:
+
+$$\text{spatial\_snr\_ratio} = \log_{10} \left( \frac{V_{edge} + c}{V_{flat} + c} \right)$$
+
+
+* *Kỳ vọng thực nghiệm:* Dải giá trị ổn định trong khoảng $[0.0, 3.0]$.
+
+
+
+### 3.2. Chuẩn hóa Nhiễu Chéo kênh (`cross_noise_ratio` - 1 Dim)
+
+**Cơ sở DSP:** So sánh năng lượng nhiễu vi mô giữa phổ sáng ($Y$) và phổ màu ($Cb$).
+*Cảnh báo (Red Flag): Đặc trưng này có rủi ro cao học "Lịch sử nén Chroma 4:2:0" của định dạng ảnh gốc.*
+
+**Thuật toán:**
+
+1. Tính phần dư kênh $Y$ và $Cb$ bằng `SQUARE3x3`, `mode='valid'` (Kích thước $254 \times 254$):
+
+$$R_Y = Y * K_{sq3}, \quad R_{Cb} = Cb * K_{sq3}$$
+
+
+2. Đo lường biên độ nhiễu tổng thể bằng L1-Norm (hạn chế bùng nổ do Outliers):
+
+$$\text{Noise}_Y = \text{mean}(|R_Y|), \quad \text{Noise}_{Cb} = \text{mean}(|R_{Cb}|)$$
+
+
+3. **Output:**
+* *Guard:* Nếu $\text{Noise}_{Cb} < 10^{-6}$, trả về `np.nan`.
+* *Công thức:* $\text{cross\_noise\_ratio} = \frac{\text{Noise}_Y}{\text{Noise}_{Cb}}$
+* *Kỳ vọng thực nghiệm:* Dải giá trị dao động $[0.5, 5.0]$.
+
+
+
+### 3.3. Thống kê Bất đối xứng Phần dư (Skew/Kurtosis - 6 Dims)
+
+**Thuật toán (Thực thi lặp lại độc lập cho $R_Y, R_{Cr}, R_{Cb}$ kích thước $254 \times 254$):**
+
+1. Tính giá trị trung bình $\mu = \text{mean}(R)$ và phương sai $\sigma^2 = \text{mean}((R - \mu)^2)$.
+2. Tính độ lệch chuẩn $\sigma = \sqrt{\sigma^2}$.
+3. **Vệ binh Kẹp sai số (Float-Precision Guard):**
+* Nếu $\sigma < 10^{-6}$ (Tín hiệu quá yếu/Vùng ảnh chết) $\rightarrow$ Lập tức trả về `np.nan` cho cả Skew và Kurtosis. *(Bảo vệ tuyệt đối khỏi lỗi chia cho 0 mà không cần số gia $\epsilon$ tùy ý).*
+
+
+4. **Output:**
+
+$$\text{skew} = \frac{\text{mean}((R - \mu)^3)}{\sigma^3}$$
+
+
+$$\text{kurt} = \frac{\text{mean}((R - \mu)^4)}{\sigma^4} - 3$$
+
+
+* *Kỳ vọng thực nghiệm:* Skewness $\in [-3.0, 3.0]$, Kurtosis $\in [-1.0, 15.0]$.
+
+
+
+---
+
+## 4. Chiến lược Xử lý Giá trị Khuyết & Ngoại lai (MLOps Missing Value Strategy)
+
+Khái niệm Sentinel `-999.0` bị loại bỏ hoàn toàn để không phá hỏng cơ chế Calibration và hàm mục tiêu của mô hình tuyến tính. Các giá trị vi phạm ràng buộc vật lý sẽ được hệ thống trích xuất trả về **`np.nan`**.
+
+**Dual-Imputation Protocol (Rẽ nhánh tại Data Pipeline):**
+
+1. **Nhánh Tree-based (XGBoost/LightGBM):** Giữ nguyên `np.nan`. Thuật toán sẽ tự động phân nhánh thông qua cơ chế `missing_split` nội tại.
+2. **Nhánh Linear/Calibration (LogReg/SVM):**
+* Áp dụng **Median Imputation** (Điền khuyết bằng Trung vị tính toán duy nhất trên tập Train In-domain).
+* Sinh tự động tính năng nhị phân (Indicator Feature): Bổ sung `is_missing_feature_name = 1` nếu gốc là `NaN`, ngược lại bằng `0`. Đảm bảo LogReg học được sự kiện "vắng mặt tín hiệu".
+
+
+
+## 5. Giao thức Đánh giá Đa cộng tuyến (Collinearity Drop Protocol)
+
+Nhận diện rủi ro: `spatial_snr_ratio`, `cross_noise_ratio`, và `kurt_noise_y` đều khởi nguồn từ $R_Y$, nguy cơ tương quan tuyến tính là rất cao. Tuyệt đối không dùng SHAP value trên validation để quyết định sống/chết do nhiễu từ giá trị khuyết.
+
+**Giao thức thực thi bắt buộc:**
+Nếu $|\text{corr}(A, B)| > 0.85$ (tính trên tập Train đã loại bỏ `NaN`):
+
+1. Thực hiện phương pháp Cắt bỏ (Ablation Study): Huấn luyện độc lập 2 mô hình (Mô hình 1 chỉ giữ A, Mô hình 2 chỉ giữ B).
+2. Đánh giá sụt giảm FPR tại mức TPR = 95% (OOD Delta) trên các tập **Cross-generator Test (SDv1.5 / GLIDE)** và **Domain Shift Test (COCOFake)**.
+3. Quyết định: **Giữ lại đặc trưng có OOD Delta tốt nhất (sụt giảm ít nhất)**. Đặc trưng còn lại phải bị loại bỏ vĩnh viễn khỏi không gian dữ liệu để đảm bảo mô hình gọn nhẹ và khái quát.
+
+=

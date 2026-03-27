@@ -1,0 +1,105 @@
+
+
+# ĐẶC TẢ KỸ THUẬT NHÓM 2: ĐẶC TRƯNG TƯƠNG QUAN & BẤT ĐỒNG NHẤT MÀU SẮC (CHROMA)
+
+**Mục tiêu Khoa học:** Khai thác các khiếm khuyết vi mô trong quá trình sinh màu của mô hình khuếch tán (Diffusion) và GAN do sự thiếu vắng lưới lọc vật lý CFA (Bayer filter) và hệ thống nội suy quang học.
+
+### 1. Đầu vào & Hằng số (Inputs & Constants)
+
+* **Đầu vào:** Mảng `ycbcr_npy` kích thước $(256, 256, 3)$, không gian màu YCrCb BT.601, định dạng `float64`.
+* **Hằng số tĩnh (Locked):**
+* `WINDOW_SIZE = 9`: Kích thước cửa sổ trượt (stride = 1, bỏ qua 4 pixel viền ngoài cùng).
+* `PIXEL_NOISE_FLOOR = 1.5`: Ngưỡng độ lớn màu sắc tối thiểu của 1 pixel để được coi là có tín hiệu.
+* `MIN_VALID_PIXELS = 2`: Số lượng pixel hợp lệ tối thiểu trong 1 cửa sổ để tính phương sai vòng.
+* `CHROMA_PERCENTILE = 50`: Tỷ lệ phần trăm bách phân vị dùng làm ngưỡng lọc mềm (Soft Mask).
+* `MIN_WINDOW_CHROMA_FLOOR = 1.5`: Ngưỡng sàn tuyệt đối cho trung bình màu sắc của một cửa sổ.
+* `EPS = 1e-8`: Số gia bảo vệ chống lỗi chia cho 0.
+
+
+
+---
+
+### 2. Trích xuất Đặc trưng chi tiết (9 Dimensions)
+
+#### 2.1. Phương sai Vòng Bất đồng nhất Cục bộ (Local Color Inconsistency)
+
+**Ý nghĩa:** Đo lường mức độ phân tán của hướng vector màu (Hue) trong phạm vi hẹp. AI thường tạo ra sự lệch pha màu (color bleeding) ở quy mô cục bộ.
+
+**Toán học & Giải thuật:**
+
+1. Dịch tâm hệ tọa độ màu: $Cr' = Cr - 128$, $Cb' = Cb - 128$.
+2. Tính ma trận độ lớn: $M = \sqrt{Cr'^2 + Cb'^2}$.
+3. Quét cửa sổ $9 \times 9$. Trong mỗi cửa sổ:
+* **Lọc Pixel:** Chỉ giữ các pixel có $M > \text{PIXEL\_NOISE\_FLOOR}$. Số lượng này gọi là $N_{valid}$.
+* Nếu $N_{valid} < \text{MIN\_VALID\_PIXELS}$, gán $var_{circ} = 0.0$.
+* Nếu hợp lệ, tính vector đơn vị: $U = \frac{Cr'}{M + \text{EPS}}$, $V = \frac{Cb'}{M + \text{EPS}}$ (chỉ trên các pixel hợp lệ).
+* Độ dài vector tổng: $R_{window} = \frac{\sqrt{(\sum U)^2 + (\sum V)^2}}{N_{valid}}$.
+* Phương sai vòng: $var_{circ} = 1 - R_{window}$.
+* Tính $\bar{M}_{window}$ (Trung bình của $M$ trên toàn bộ 81 pixel của cửa sổ).
+
+
+4. **Bộ lọc Cửa sổ (Dual-Threshold Mask):** 
+$$\text{threshold} = \max\Big(\text{Percentile}(\{\bar{M}_{window}\}, 50), \ \text{MIN\_WINDOW\_CHROMA\_FLOOR}\Big)$$
+
+
+
+Chỉ giữ lại các cửa sổ có $\bar{M}_{window} \ge \text{threshold}$.
+5. **Feature Output (1 Dim):** Trung bình (`mean`) của các $var_{circ}$ thuộc các cửa sổ được giữ lại. (Nếu không có cửa sổ nào qua vòng lọc, trả về Sentinel `0.0`).
+
+**Biện luận phòng tránh rủi ro (Justification):**
+
+* *Tránh Bẫy Modulo (Modulo Trap):* Sử dụng thống kê hướng ($U, V$) thay vì độ lệch góc ($\arctan2$) để không bị bùng nổ phương sai ở ranh giới $-\pi$ và $\pi$.
+* *Tránh Khuyếch đại Nhiễu (Noise Amplification):* `PIXEL_NOISE_FLOOR` ngăn chặn các pixel xám chứa nhiễu lượng tử JPEG bị "phóng to" thành vector đơn vị độ dài 1, gây nhiễu loạn tổng vector.
+* *Tránh Dị thường Bão hòa (Saturation Outlier):* Chuẩn hóa về vector đơn vị ($U, V$) đảm bảo 1 pixel cực kỳ rực rỡ không thể lấn át 80 pixel còn lại trong cửa sổ.
+* *Tránh Bẫy Bách phân vị Tương đối (Relative Percentile Trap):* Hàm $\max()$ kết hợp với Threshold sàn ($1.5$) đảm bảo trong các ảnh tối/đơn sắc (Low-key/Monochrome), hệ thống thà loại bỏ toàn bộ cửa sổ (trả về 0.0) chứ không hạ chuẩn để thu thập các cửa sổ rác.
+
+#### 2.2. Tương quan Chéo và Tỷ lệ Năng lượng (Cross-Channel Correlation & Energy Ratio)
+
+**Ý nghĩa:** AI sinh màu và sáng một cách độc lập từ không gian ẩn (latent space), làm phá vỡ sự tương quan tuyến tính tự nhiên giữa phổ sáng và phổ màu.
+
+**Toán học & Giải thuật:**
+
+1. **Hệ số Tương quan Pearson (3 Dims):** 
+$$r_{XY} = \frac{\text{cov}(X,Y)}{\text{std}(X) \cdot \text{std}(Y) + \text{EPS}}$$
+
+
+
+Áp dụng cho 3 cặp $(Y, Cr), (Y, Cb), (Cr, Cb)$. (Bảo vệ: Nếu std < 1e-6, trả về `0.0`).
+2. **Tỷ lệ Năng lượng Chroma (1 Dim):**
+
+$$\text{energy\_ratio} = \frac{\text{var}(Cr) + \text{var}(Cb)}{\text{var}(Y) + \text{EPS}}$$
+
+
+(Bảo vệ: Nếu var(Y) < 1e-6, trả về `0.0`).
+
+**Biện luận phòng tránh rủi ro:**
+
+* *Tránh Bẫy Nội dung (Content Bias):* Sử dụng Pearson (chuẩn hóa tỷ lệ) thay vì Covariance thô để mô hình không đánh giá sai các bức ảnh có độ tương phản tổng thể (contrast) cực cao hoặc cực thấp.
+
+#### 2.3. Ma trận Đồng xuất hiện Mức xám trên Kênh Màu (Chroma GLCM)
+
+**Ý nghĩa:** Bắt vết các cấu trúc nhiễu định hướng vi mô (directional color noise) trên kênh $Cr$.
+
+**Toán học & Giải thuật:**
+
+1. **Lượng tử hóa Tập trung (Centered Quantization):**
+
+$$q = \text{clip}\left( \Big( \text{clip}(Cr + 16, 0, 255).\text{astype}(\text{np.int32}) \Big) \ // \ 32, \ 0, \ 7 \right)$$
+
+
+2. Tính toán ma trận GLCM với số mức $N=8$, khoảng cách $D=2$, quét 4 hướng $[0, \pi/4, \pi/2, 3\pi/4]$, đối xứng và chuẩn hóa.
+3. **Feature Output (4 Dims):** Giá trị trung bình của 4 hướng cho: `Contrast`, `Correlation`, `Energy`, `Homogeneity`.
+
+**Biện luận phòng tránh rủi ro:**
+
+* *Tránh Lệch pha Ranh giới Xám (Half-bin Shift Trap):* Việc cộng thêm `+16` (nửa chiều rộng bin) giúp giá trị màu xám ($128$) nằm chính giữa Bin số 4. Các dao động nhiễu vi mô xung quanh trục xám sẽ nằm gọn trong cùng một Bin, không bị cắt xén rời rạc gây nhiễu loạn đặc trưng.
+* *Tính Xác định Tuyệt đối (100% Deterministic):* Việc ép kiểu nguyên (`int32`) và chia nguyên (`//`) chặn đứng mọi nguy cơ làm tròn số phẩy động khác nhau trên các kiến trúc CPU/Hệ điều hành khác nhau.
+
+---
+
+### 3. Sổ tay Giới hạn Vật lý (OOD Red Flags)
+
+*(Các giới hạn này là bản chất của dữ liệu, hệ thống ML cần dùng cây quyết định để tự cân bằng)*
+
+1. **Cụm giá trị Sentinel (Sentinel Clustering):** Đối với các ảnh Studio phông xám hoặc nghệ thuật đơn sắc (Monochrome), tính năng Local Color Inconsistency sẽ tự động bị Mask out và trả về `0.0`. GBDT/XGBoost cần tự học cách phân nhánh giá trị `0.0` này và trao quyền quyết định cho Nhóm 1 (Tần số).
+2. **Sự trợ giúp từ Pipeline (Pipeline-Assistance):** Pearson và Energy Ratio sẽ bị ảnh hưởng một phần bởi thuật toán lượng tử hóa JPEG In-memory ở bước Tiền xử lý. Đây là sự đánh đổi (trade-off) bắt buộc để san bằng chuẩn nén giữa ảnh Real và Fake.

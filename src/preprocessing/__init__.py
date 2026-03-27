@@ -1,0 +1,77 @@
+"""Public preprocessing v4 API."""
+
+from .constants import (
+    ALPHA_BACKGROUND_VALUE,
+    CROP_SIZE,
+    DEFAULT_CONFIG,
+    OUTPUT_EXT,
+    PREPROCESS_VERSION,
+    RESIDUE_X,
+    RESIDUE_Y,
+    SUPPORT_THRESHOLD,
+    PreprocessConfig,
+)
+from .decode import composite_straight_alpha, decode_image, normalize_mode_to_rgb
+from .geometry import (
+    CropOrigin,
+    admissible_starts,
+    center_linf_distance,
+    crop_exact_residue,
+    exact_crop_origin,
+    min_length_for_exact_residue_crop,
+    nearest_residue_start,
+    phase_distance,
+)
+from .orientation import apply_orientation, apply_orientation_pil, read_orientation
+from .pipeline import (
+    build_output_path,
+    count_dataset,
+    discover_images,
+    preprocess_one,
+    print_summary,
+    results_to_frame,
+    run_pipeline,
+    save_manifest,
+    scan_dataset_tree,
+    summarise_results,
+)
+from .types import MANIFEST_COLUMNS, PreprocessResult, PreprocessStatus
+
+__all__ = [
+    "ALPHA_BACKGROUND_VALUE",
+    "CROP_SIZE",
+    "CropOrigin",
+    "DEFAULT_CONFIG",
+    "MANIFEST_COLUMNS",
+    "OUTPUT_EXT",
+    "PREPROCESS_VERSION",
+    "PreprocessConfig",
+    "PreprocessResult",
+    "PreprocessStatus",
+    "RESIDUE_X",
+    "RESIDUE_Y",
+    "SUPPORT_THRESHOLD",
+    "admissible_starts",
+    "apply_orientation",
+    "apply_orientation_pil",
+    "build_output_path",
+    "center_linf_distance",
+    "composite_straight_alpha",
+    "count_dataset",
+    "crop_exact_residue",
+    "decode_image",
+    "discover_images",
+    "exact_crop_origin",
+    "min_length_for_exact_residue_crop",
+    "nearest_residue_start",
+    "normalize_mode_to_rgb",
+    "phase_distance",
+    "preprocess_one",
+    "print_summary",
+    "read_orientation",
+    "results_to_frame",
+    "run_pipeline",
+    "save_manifest",
+    "scan_dataset_tree",
+    "summarise_results",
+]

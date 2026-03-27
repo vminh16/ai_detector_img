@@ -1,0 +1,52 @@
+
+
+### TẦNG 1: TIẾP NHẬN & XÁC THỰC (API GATEWAY & INGESTION)
+
+1. **Tiếp nhận Payload:** Hệ thống (thông qua REST API hoặc gRPC) nhận một payload chứa byte-stream của bức ảnh. Hỗ trợ các định dạng JPG, PNG, WebP.
+2. **Xác thực thô (Raw Validation):** Kiểm tra dung lượng file (giới hạn ví dụ max 20MB) và kiểm tra magic bytes (chữ ký file) để chống các cuộc tấn công nhúng mã độc (malicious payload).
+
+### TẦNG 2: TIỀN XỬ LÝ ĐÓNG BĂNG (HARDENED PREPROCESSING ENGINE)
+
+Đây là khối xử lý cô lập nhằm biến mọi bức ảnh về một định dạng chuẩn mực toán học.
+
+1. **Giải mã & EXIF (Decode):** Đọc byte thô bằng OpenCV với cờ `IMREAD_IGNORE_ORIENTATION` để tránh thư viện tự động xoay lén. Tự phân tích byte EXIF để xoay ảnh về đúng chiều vật lý, sau đó loại bỏ toàn bộ siêu dữ liệu (Strip Metadata/ICC Profiles).
+2. **Đệm viền (Reflect Padding):** Nếu ảnh có chiều nào nhỏ hơn 256px, áp dụng thuật toán đệm gương `BORDER_REFLECT_101` để đảm bảo kích thước tối thiểu $259 \times 259$ mà không sinh ra nhiễu biên.
+3. **Cắt tâm Xô lệch (Misaligned Center Crop):** Tính toán tọa độ tâm. Nếu tọa độ chia hết cho 8, tịnh tiến lưới cắt thêm `+3 pixel`. Cắt ra ma trận chuẩn $256 \times 256$.
+4. **Chuẩn hóa Nén (JPEG Bottleneck):** Ép ma trận qua bộ nén JPEG trên RAM (in-memory) với mức chất lượng $Q \in [90, 98]$ (được băm ngẫu nhiên tĩnh từ tên/hash của file) nhằm san phẳng khác biệt định dạng nén gốc.
+5. **Chuyển đổi Không gian Màu:** Biến đổi ma trận từ BGR sang YCrCb (chuẩn BT.601). Đầu ra là mảng NumPy `(256, 256, 3)` kiểu `uint8`.
+
+### TẦNG 3: ĐỘNG CƠ TRÍCH XUẤT ĐẶC TRƯNG (33-DIM VECTORIZER)
+
+Mảng $256 \times 256$ được nạp vào bộ trích xuất đặc trưng thuần toán học DSP.
+
+1. **Thực thi Song song (Feature Extraction):** Kích hoạt đồng thời 4 module độc lập:
+* **Nhóm 1 (Tần số):** Tính FFT, trích xuất 6 đặc trưng phổ năng lượng và thống kê DCT.
+* **Nhóm 2 (Màu sắc):** Tính ma trận GLCM và Variance cửa sổ trượt, trích xuất 9 đặc trưng bất đồng nhất màu.
+* **Nhóm 3 (Vi mô):** Chập hạt nhân SRM (`mode='valid'`) và chạy LBP, trích xuất 10 đặc trưng phần dư.
+* **Nhóm 4 (Không gian):** Trích xuất SNR ratio và Kurtosis trên các mặt nạ Edge/Flat, sinh ra 8 đặc trưng.
+
+
+2. **Xử lý Ngoại lệ Nội tuyến (Inline Sentinel Guard):** Bất kỳ lỗi chia cho 0 hoặc vùng ảnh phẳng chết tín hiệu nào sẽ tự động được các hàm toán học gán giá trị cảnh giới (`0.0` hoặc `np.nan` tùy nhóm).
+3. **Đóng gói (Vector Assembly):** Hợp nhất kết quả thành một Vector Đặc trưng $1 \times 33$ chuẩn xác.
+
+### TẦNG 4: SUY LUẬN & HIỆU CHUẨN (INFERENCE & CALIBRATION)
+
+Khối này chứa các "trọng số" (weights) đã được đóng băng từ quá trình huấn luyện.
+
+1. **Suy luận GBDT (Raw Scoring):** Vector 33 chiều được nạp vào Champion Model (XGBoost/LightGBM). Mô hình tự động xử lý các giá trị `np.nan` thông qua cơ chế `missing_split` nguyên thủy mà không cần bước Imputation (điền khuyết) rườm rà. Kết quả trả ra là một Raw Margin Score.
+2. **Hiệu chuẩn Xác suất (Platt Scaling / Isotonic):** Raw Score được nạp qua hàm Hiệu chuẩn (Calibration function) đã được fit sẵn từ trước. Đầu ra cuối cùng là Điểm số Khả tín (AI-suspicion score): $P_{AI} \in [0.0, 1.0]$. Đại lượng này phản ánh đúng xác suất vật lý ảnh bị can thiệp bởi AI.
+
+### TẦNG 5: PHÂN LUỒNG QUYẾT ĐỊNH (TRIAGE ROUTING)
+
+Dựa trên $P_{AI}$ và các ngưỡng quyết định (Thresholds) đã khóa cứng từ Phase Huấn luyện, hệ thống tự động gán nhãn hành động (Zone):
+
+1. **Zone LOW (Ví dụ $P_{AI} < 0.30$):** Hệ thống gán nhãn `REAL` (Tự động Pass). Ảnh tiếp tục đi vào luồng hiển thị bình thường của nền tảng.
+2. **Zone HIGH (Ví dụ $P_{AI} > 0.85$):** Hệ thống gán nhãn `FAKE` (Tự động Flag). Kích hoạt cờ cảnh báo AI hoặc tạm thời chặn hiển thị.
+3. **Zone MEDIUM ($0.30 \le P_{AI} \le 0.85$):** Vùng Bất định (Uncertainty). Hệ thống nhận diện đặc trưng bị mờ nhạt (do JPEG suy thoái nát hoặc bối cảnh nhiễu). Ảnh được gán nhãn `MANUAL_REVIEW`, định tuyến gửi thẳng cho đội ngũ kiểm duyệt con người (Moderators) hoặc yêu cầu user cung cấp ảnh gốc. Việc này giúp chặn đứng các phán quyết False Positive/False Negative thảm họa.
+
+### TẦNG 6: PHẢN HỒI & GHI NHẬN (TELEMETRY & RESPONSE)
+
+1. **API Response:** Trả về payload JSON siêu tốc cho Client, bao gồm: `ai_score` (Xác suất), `zone` (LOW/MEDIUM/HIGH), và `top_contributors` (3 đặc trưng có SHAP value cao nhất giải thích tại sao hệ thống quyết định như vậy).
+2. **Data Logging (Shadow Mode):** Đẩy bất đồng bộ (Asynchronous) vector 33 chiều, raw image hash, score và zone vào Data Warehouse. Dữ liệu này được dùng để Monitor Model Drift (Sự trôi dạt mô hình) theo thời gian thực và xây dựng tập dữ liệu tái huấn luyện cho phiên bản 2.0.
+
+Kiến trúc này đảm bảo tốc độ phản hồi tính bằng mili-giây (siêu nhẹ nhờ trích xuất đặc trưng thuần CPU), đồng thời có độ tin cậy tuyệt đối nhờ lớp Calibration và Triage Routing.

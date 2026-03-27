@@ -1,0 +1,76 @@
+Dưới đây là bản tổng hợp toàn diện toàn bộ không gian đặc trưng (Feature Space) đã được thiết kế tinh xảo cho mô hình phân loại của bạn. Hệ thống này bao gồm cả các đặc trưng miền không gian, miền tần số và kết cấu, được thiết kế chuyên biệt để "bắt thóp" các mô hình Diffusion, đồng thời hoàn toàn miễn nhiễm với các thủ thuật đánh lừa từ nén JPEG.
+
+Các đặc trưng được chia thành 4 nhóm chiến lược:
+
+### Nhóm 1: Đặc trưng Phổ Tần Số (Frequency Domain - Mid-Bands Focus)
+
+Nhóm này khai thác điểm yếu chí mạng của mạng nơ-ron (đặc biệt là các lớp upsampling) khi chúng tạo ra các nhiễu chu kỳ không tự nhiên.
+
+**1. Fourier Ring Statistic (FRS) ở dải tần số trung bình**
+
+* **Lý do:** Các mô hình Diffusion thường để lại "Checkerboard Artifacts" (nhiễu bàn cờ) ẩn sâu trong miền tần số . Bằng cách chỉ lấy dải tần số trung bình (8–32 cycles), ta loại bỏ được thông tin nội dung ảnh (tần số thấp) và tránh được vùng bị thuật toán JPEG "san phẳng" (tần số cực cao). Sự bất thường trong phương sai ở các dải này là dấu hiệu cực kỳ mạnh của AI.
+* **Phương pháp:** Áp dụng biến đổi 2D FFT lên ảnh. Tích phân năng lượng (Azimuthal Integration) dọc theo các vòng tròn đồng tâm ở phổ tần số, sau đó tính phương sai (Variance) của năng lượng trên các vòng từ chu kỳ 8 đến 32.
+
+**2. Thống kê hệ số DCT dải trung (DCT Mid-Band Stats)**
+
+* **Lý do:** Tương tự FRS nhưng hoạt động trên lưới block cục bộ thay vì toàn cục. Nó giúp bắt các vi cấu trúc lặp lại ở phạm vi hẹp.
+* **Phương pháp:** Trích xuất các hệ số DCT theo đường chéo zíc-zắc (từ index 10 đến 40). Tính Mean, Variance và Skewness của bình phương biên độ các hệ số này trên toàn bộ các khối của ảnh.
+
+**3. Phân rã phổ tần số 1D (1D Power Spectrum Decay)**
+
+* **Lý do:** Ảnh quang học tự nhiên luôn có phổ năng lượng suy giảm tuân theo một quy luật vật lý nghiêm ngặt ($1/f^\alpha$). Ảnh AI thường có đường cong bị gãy hoặc lệch dốc do quy trình giải mã từ latent space.
+* **Phương pháp:** Trích xuất hệ số góc $\alpha$ (độ dốc) của đường cong hồi quy phổ FFT 1D và mức độ dao động (variance) của các điểm dữ liệu thực tế so với đường cong lý tưởng này.
+
+### Nhóm 2: Tương quan & Bất đồng nhất Màu sắc (Color Cross-Correlation)
+
+Nhóm này khai thác sự thiếu vắng bộ lọc CFA (Bayer filter) và quá trình nội suy quang học trong ảnh AI, đặc biệt tập trung vào các kênh sắc độ (Chroma).
+
+**4. Bất nhất quán màu cục bộ (Local Color Inconsistency)**
+
+* **Lý do:** Các pha chuyển màu của Diffusion model thường rất gắt hoặc lem màu vi mô (color bleeding) do không bị ràng buộc bởi vật lý ánh sáng. Lỗi này tồn tại ở mặt cấu trúc nên không bị nhiễu JPEG che giấu.
+* **Phương pháp:** Quét một cửa sổ trượt (sliding window) kích thước lẻ ($7 \times 7$ hoặc $9 \times 9$ để lệch hoàn toàn với lưới nén JPEG $8 \times 8$). Tại mỗi cửa sổ, tính tỷ lệ Cr/Cb, sau đó lấy phương sai (Variance) của tỷ lệ này trên toàn ảnh.
+
+**5. Tương quan chéo và Tỷ lệ năng lượng các kênh (Cross-Channel Correlation)**
+
+* **Lý do:** Kênh độ sáng (Y) và kênh màu (Cr, Cb) của ảnh thật luôn có một sự liên kết vật lý chặt chẽ. AI sinh màu và sáng tương đối độc lập nên tỷ lệ này thường bị phá vỡ.
+* **Phương pháp:** Tính ma trận hiệp phương sai (Covariance Matrix) chéo giữa Y-Cr, Y-Cb, Cr-Cb. Tính thêm tỷ lệ năng lượng (Energy ratio) tổng thể giữa kênh Y và kênh Chroma.
+
+**6. Ma trận đồng xuất hiện trên kênh màu (Chroma GLCM)**
+
+* **Lý do:** Để bắt các hạt nhiễu màu (color noise) vi mô có tính định hướng.
+* **Phương pháp:** Tính GLCM trên mảng 2D của kênh Cr và Cb với khoảng cách offset là 2 hoặc 3 pixel. Trích xuất 4 chỉ số: Contrast, Correlation, Energy, và Homogeneity.
+
+### Nhóm 3: Đặc trưng Phần dư Vi mô (Micro-Texture Residuals)
+
+Nhóm này sử dụng các bộ lọc nhân tạo để "bóc tách" lớp nội dung (hình ảnh con người, cảnh vật) và chỉ giữ lại lớp "nhiễu nền" (noise background).
+
+**7. Mô hình Không gian Phong phú (Advanced SRM)**
+
+* **Lý do:** Kỹ thuật SOTA trong Image Forensics cổ điển. Nó cô lập các nhiễu cấu trúc (structural noise) cực kỳ nhỏ do thuật toán sinh ảnh tạo ra .
+* **Phương pháp:** Dùng các kernel bộ lọc thông dải (như `SQUARE3x3`, `EDGE3x3`, và `SQUARE5x5`) chập (convolve) với ảnh để lấy ma trận phần dư. Tính các thông số thống kê cơ bản (Mean, Variance, Skewness, Kurtosis) trên các ma trận này.
+
+**8. Mẫu Nhị phân Cục bộ trên kênh màu (Chroma LBP)**
+
+* **Lý do:** Bắt được các mẫu kết cấu hạt (grain textures) và các cụm pixel dị thường (artifacts) ở cấp độ vi mô mà GLCM có thể bỏ sót.
+* **Phương pháp:** Áp dụng thuật toán Local Binary Patterns lên kênh Cr và Cb, sau đó lấy các bin trung tâm của Histogram LBP làm vector đặc trưng.
+
+### Nhóm 4: Thống kê Không gian Chuẩn hóa (Normalized Spatial Stats)
+
+Đây là nhóm thống kê độ sắc nét và nhiễu, nhưng đã được thiết kế lại theo dạng "tỷ lệ tương đối" để mô hình không học vẹt đặc trưng nén của JPEG.
+
+**9. Chuẩn hóa SNR Không gian (Spatial SNR Normalization)**
+
+* **Lý do:** Ảnh AI thường bị mất cân bằng: vùng nền bị làm phẳng quá mức (over-smooth) trong khi vùng viền vật thể lại sắc nét cực đoan. Việc chia tỷ lệ giúp triệt tiêu tác động của JPEG (vì JPEG tác động lên cả hai vùng).
+* **Phương pháp:** Dùng bộ lọc Sobel/Canny tách ảnh thành Vùng viền (Edge) và Vùng phẳng (Flat). Tính độ sắc nét ($V_{edge}$) ở vùng viền và nhiễu tồn dư ($V_{flat}$) ở vùng phẳng. Đặc trưng là tỷ lệ $V_{edge} / V_{flat}$.
+
+**10. Chuẩn hóa Nhiễu Chéo kênh (Cross-Channel Noise Normalization)**
+
+* **Lý do:** Ảnh thật có tỷ lệ nhiễu giữa kênh Sáng và kênh Màu tuân theo một hằng số vật lý. Ảnh AI có nhiễu tồn dư ngẫu nhiên, phá vỡ hằng số này.
+* **Phương pháp:** Tính độ nhiễu (ví dụ: dùng Median Absolute Deviation) riêng biệt trên kênh Y và kênh Cb. Đặc trưng đưa vào là phân số $Noise(Y) / Noise(Cb)$.
+
+**11. Thống kê Pixel cơ bản (Basic Pixel Stats)**
+
+* **Lý do:** Bắt các điểm ảnh dị thường (outliers) hoặc sự lệch tông màu.
+* **Phương pháp:** Tính Skewness (Độ lệch) và Kurtosis (Độ nhọn) của từng kênh màu. Độ nhọn đặc biệt quan trọng để đánh giá xem ảnh có quá nhiều cực trị bất thường hay không.
+
+Hệ thống đặc trưng này, khi kết hợp cùng nhau, sẽ tạo ra một bức tranh định lượng hoàn hảo về sự khác biệt giữa thế giới vật lý quang học (Real) và thế giới toán học khuếch tán (AI). Bước tiếp theo khi đưa vào mô hình, các thuật toán như XGBoost/LightGBM sẽ tự động chấm điểm quan trọng (Feature Importance) để chọn lọc ra những mũi nhọn mạnh nhất.

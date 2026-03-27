@@ -1,0 +1,62 @@
+
+---
+
+### Trình bày chi tiết Pipeline Tiền xử lý (SOTA Image Forensics)
+
+**Mục tiêu tối thượng:** San phẳng mọi "đường tắt" (shortcut/leakage) liên quan đến metadata, kích thước, và lịch sử nén file; ép mô hình Machine Learning cổ điển phải học các vi cấu trúc (micro-artifacts) đích thực do thuật toán AI sinh ra.
+
+Pipeline xử lý một bức ảnh (Single-pass In-memory) đi qua 6 trạm kiểm soát nghiêm ngặt:
+
+#### Trạm 1: Đọc ảnh thô & Khôi phục Hình học (Raw Decode & EXIF)
+
+* **Vấn đề:** Các thư viện đọc ảnh mặc định thường tự ý xoay ảnh theo cờ EXIF hoặc áp dụng filter màu, làm sai lệch cấu trúc pixel gốc.
+* **Cách giải quyết:** Đọc byte thô (raw bytes) và yêu cầu OpenCV giải mã nhưng cấm tuyệt đối việc tự động xoay (`IMREAD_IGNORE_ORIENTATION`). Sau đó, hệ thống tự parse byte EXIF để tìm góc xoay và dùng hàm `cv2` để lật/xoay ma trận một cách có chủ đích. Việc này đảm bảo cấu trúc không gian của ảnh không bị biến dạng vô hình.
+
+#### Trạm 2: Đệm viền phản chiếu (Symmetric Reflect Padding)
+
+* **Vấn đề:** Để crop được ảnh kích thước chuẩn 256x256, những ảnh nhỏ hơn cần được đệm thêm viền (padding). Nếu đệm bằng màu đen hoặc xám, ranh giới giữa mép ảnh thật và phần đệm sẽ tạo ra một đường thẳng sắc lẹm. Các đặc trưng phổ tần số (như FFT) hay kết cấu (GLCM) sẽ bị nhiễu loạn hoàn toàn bởi đường viền nhân tạo này.
+* **Cách giải quyết:** Sử dụng thuật toán `BORDER_REFLECT_101`. Mép ảnh sẽ được lặp lại đối xứng như qua một tấm gương, tạo ra sự chuyển tiếp mượt mà, không sinh ra các xung tần số cao giả mạo. Ảnh luôn được pad lên kích thước tối thiểu là **259x259** (256 + 3).
+
+#### Trạm 3: Cắt tâm xô lệch (Misaligned Center Crop) — *Trái tim của Pipeline*
+
+* **Vấn đề:** Toàn bộ ảnh Real trong tập dữ liệu là JPEG (bị chia khối lưới 8x8 pixel để nén). Nếu ta cắt ảnh ngay tại tọa độ chia hết cho 8 (ví dụ 0,0), khi nén lại ở bước sau, lưới 8x8 mới sẽ đè khít lên lưới cũ, sinh ra hiện tượng "răng cưa tần số" (Double Quantization Effect). Mô hình sẽ dùng vết răng cưa này làm shortcut để nhận diện ảnh Real.
+* **Cách giải quyết:** Hệ thống tính toán tọa độ cắt tâm. Nếu tọa độ này (so với ảnh gốc ban đầu) vô tình chia hết cho 8, hệ thống sẽ cố tình cộng thêm một độ dời lẻ (`+3 pixel`) để tịnh tiến khung cắt. Thao tác này phá vỡ hoàn toàn lưới DCT 8x8 cũ của ảnh Real, khiến mọi bức ảnh trở thành "tờ giấy trắng" trước khi bước vào trạm tiếp theo.
+	( 1. Gốc rễ nền tảng: Chuẩn nén JPEG và Lưới 8x8
+Thuật toán nén JPEG không xử lý toàn bộ bức ảnh cùng một lúc. Nó chia bức ảnh thành một lưới các khối vuông, mỗi khối có kích thước 8x8 pixel .
+Tại mỗi khối 8x8 này, JPEG thực hiện 2 bước cốt lõi:
+Biến đổi DCT (Discrete Cosine Transform): Chuyển đổi thông tin từ không gian điểm ảnh (pixel) sang miền tần số (frequency coefficients).
+Lượng tử hóa (Quantization): Đây là bước gây mất mát dữ liệu (lossy). Thuật toán lấy ma trận DCT chia cho một "Bảng lượng tử hóa" (Quantization Table - Q-Table) và làm tròn đến số nguyên gần nhất.
+Việc chia và làm tròn này chính là hành động "nén". Nó tạo ra một dấu vân tay toán học (quantization fingerprint) vĩnh viễn trên các hệ số tần số của khối 8x8 đó.
+2. Nghịch lý Nén kép (Double Quantization Effect)
+Dựa trên báo cáo metadata, 100% tập ảnh Real của bạn đã là JPEG (mang sẵn dấu vân tay lượng tử hóa lần 1 từ máy ảnh), trong khi tập Fake là PNG (chưa từng bị lượng tử hóa).
+Ở cuối pipeline tiền xử lý, bạn ép cả hai tập qua nút thắt JPEG (Q=90-98) để đồng nhất định dạng.
+Với ảnh Fake: Đây là lần nén đầu tiên (Single Compression). Phân bố hệ số tần số (histogram) sẽ có hình chuông mượt mà.
+Với ảnh Real: Đây là lần nén thứ hai (Double Compression).
+Nếu lưới 8x8 của lần nén thứ 2 trùng khớp hoàn toàn với lưới 8x8 của lần nén thứ 1, phép toán "chia và làm tròn" sẽ lặp lại hai lần trên cùng một tập dữ liệu với hai mẫu số khác nhau. Về mặt toán học, điều này tạo ra Hiệu ứng răng cưa (Comb/Sawtooth Effect) . Biểu đồ tần số của ảnh nén kép sẽ xuất hiện các đỉnh vọt lên cao và các khoảng trống (số 0) lặp lại theo chu kỳ.
+3. Nguyên lý của Phương pháp Cắt tâm xô lệch
+Trong pipeline của bạn, hàm center_crop được thiết kế để phá vỡ sự trùng khớp này.
+Khi bạn cắt một khung 256x256 từ ảnh gốc:
+Hệ thống tính tọa độ cắt (orig_x0, orig_y0) dựa trên ảnh thật (đã trừ đi phần padding).
+Hệ thống kiểm tra: Nếu orig_x0 % 8 == 0 (tọa độ cắt nằm chẵn trên mép lưới 8x8 cũ), nó sẽ cộng thêm một độ dời lẻ (ví dụ: +3 pixel).
+Hiệu quả của phép tịnh tiến +3 pixel:
+Lưới 8x8 mới (của nút thắt JPEG in-memory) giờ đây sẽ nằm "vắt ngang" giữa các khối 8x8 cũ. Một khối 8x8 mới sẽ chứa các pixel trộn lẫn từ 4 khối cũ khác nhau.
+Khi tính toán lại DCT trên khối mới này, sự xáo trộn pixel ở biên giới các khối cũ phá hủy hoàn toàn cấu trúc chu kỳ lượng tử hóa trước đó. Thuật toán JPEG lần 2 sẽ nhìn nhận khối pixel này như một dữ liệu không gian thô (Raw) chưa từng bị nén. Dấu vết nén kép bị xóa sổ hoàn toàn.
+4. Vai trò của thuật toán trong Pipeline
+Thuật toán này đóng vai trò là "Người tẩy não" (History Eraser).
+Trong dự án của bạn, vì bạn sử dụng mô hình ML truyền thống kết hợp trích xuất đặc trưng tần số (FFT/DCT) và kết cấu (GLCM), hệ thống cực kỳ nhạy cảm với các dị thường thống kê. Cắt tâm xô lệch đóng vai trò đảm bảo ảnh Real và ảnh Fake khi bước vào nút thắt JPEG đều ở trạng thái "trắng" về lịch sử nén, tạo ra một sân chơi công bằng tuyệt đối.)
+
+
+#### Trạm 4: Nút thắt chuẩn hóa nén (JPEG Compression Normalisation)
+
+* **Vấn đề:** Ảnh Fake (nguồn PNG) chưa từng bị nén, trong khi ảnh Real mang dấu vết nén của hàng chục hãng máy ảnh khác nhau (Canon, Nikon,...).
+* **Cách giải quyết:** Bản patch 256x256 sẽ bị ép nén qua một chuẩn JPEG trên RAM (In-memory) với mức chất lượng $Q$ được chọn ngẫu nhiên đồng đều trong khoảng $[90, 98]$. Tuy nhiên, để đảm bảo tính tái lập (reproducibility), mức $Q$ này không dùng `random` thuần, mà được băm (hash) từ chuỗi đường dẫn tương đối của file. Kết quả: cả ảnh Real (đã bị xô lệch lưới) và ảnh Fake đều nhận chung một bảng ma trận lượng tử hóa của thư viện Python. Shortcut về định dạng nén bị triệt tiêu 100%.
+
+#### Trạm 5: Không gian màu YCrCb (BT.601)
+
+* **Vấn đề:** Kênh RGB trộn lẫn thông tin độ sáng (Luminance) và màu sắc (Chrominance). Trong các mô hình sinh ảnh như Diffusion, lỗi sai lệch vi mô thường trốn ở các dải chuyển màu (kênh sắc độ) thay vì dải sáng tối.
+* **Cách giải quyết:** Chuyển đổi ma trận sang không gian màu `YCrCb`. Mô hình ML sau này có thể tập trung trích xuất đặc trưng mạnh mẽ trên 2 kênh `Cr` và `Cb`, nơi các dấu vết "checkerboard artifacts" của AI hiện rõ nhất.
+
+#### Trạm 6: Lưu trữ "Đoạn tuyệt Metadata" (The Nuclear Option)
+
+* Thay vì lưu lại dưới dạng file ảnh truyền thống (JPG/PNG), ma trận 256x256x3 (uint8) được kết xuất thẳng ra ổ cứng dưới định dạng mảng NumPy nguyên thủy (`.npy`).
+* Bước này cách ly vĩnh viễn dữ liệu khỏi mọi rủi ro rò rỉ (leakage) từ EXIF, ICC Profile, Header, đảm bảo quy trình huấn luyện phía sau sạch sẽ tuyệt đối.
