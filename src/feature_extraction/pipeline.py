@@ -7,6 +7,7 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
+import __main__
 
 import numpy as np
 import pandas as pd
@@ -39,6 +40,13 @@ def load_feature_manifest(
     accepted["dataset_name"] = config.dataset_name
     accepted["feature_version"] = config.feature_version
     accepted["preprocess_version"] = accepted["preprocess_version"].fillna(config.preprocess_version_expected)
+    mismatched = accepted["preprocess_version"].astype(str) != config.preprocess_version_expected
+    if bool(mismatched.any()):
+        counts = accepted.loc[mismatched, "preprocess_version"].value_counts().to_dict()
+        raise ValueError(
+            "Manifest contains patches from unexpected preprocess_version values: "
+            f"{counts}. Expected only {config.preprocess_version_expected!r}."
+        )
     accepted = assign_split_roles(accepted, config=config)
     if max_files is not None:
         accepted = stratified_sample_rows(accepted, max_rows=max_files, seed=config.split_seed)
@@ -159,7 +167,31 @@ def build_tasks(
     *,
     config: FeatureExtractionConfig = DEFAULT_CONFIG,
 ) -> list[tuple[Any, ...]]:
-    return [_task_from_row(idx, row, config) for idx, (_, row) in enumerate(manifest.iterrows())]
+    tasks: list[tuple[Any, ...]] = []
+    for idx, row in enumerate(manifest.itertuples(index=False)):
+        tasks.append(
+            (
+                idx,
+                str(row.source_file_path),
+                str(row.patch_path),
+                str(row.generator),
+                str(row.label),
+                str(row.split_role),
+                str(row.dataset_name),
+                str(row.preprocess_version),
+                config.feature_version,
+                config.include_conditional,
+                config.include_research,
+            )
+        )
+    return tasks
+
+
+def _process_pool_safe() -> bool:
+    main_file = getattr(__main__, "__file__", "")
+    if not main_file:
+        return False
+    return Path(main_file).name != "<stdin>"
 
 
 def results_to_frame(
@@ -211,6 +243,11 @@ def run_feature_pipeline(
 ) -> list[FeatureExtractionResult]:
     if workers is None:
         workers = max(1, min(8, (os.cpu_count() or 4) - 1))
+    if workers > 1 and not _process_pool_safe():
+        logger.warning(
+            "Falling back to workers=1 because ProcessPoolExecutor is not safe from the current entrypoint."
+        )
+        workers = 1
     tasks = build_tasks(manifest, config=config)
     results: list[FeatureExtractionResult] = []
     if workers <= 1:

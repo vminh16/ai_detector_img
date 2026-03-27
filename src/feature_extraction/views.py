@@ -15,8 +15,8 @@ def _validate_patch(patch: np.ndarray) -> np.ndarray:
         raise TypeError(f"Expected np.ndarray, got {type(patch).__name__}")
     if patch.shape != (PATCH_SIZE, PATCH_SIZE, RGB_CHANNELS):
         raise ValueError(f"Expected shape {(PATCH_SIZE, PATCH_SIZE, RGB_CHANNELS)}, got {patch.shape}")
-    if not np.issubdtype(patch.dtype, np.integer):
-        raise TypeError(f"Expected integer patch, got {patch.dtype}")
+    if patch.dtype != np.uint8:
+        raise TypeError(f"Expected uint8 patch, got {patch.dtype}")
     if not np.isfinite(patch).all():
         raise ValueError("Patch contains non-finite values.")
     patch_u8 = np.asarray(patch, dtype=np.uint8)
