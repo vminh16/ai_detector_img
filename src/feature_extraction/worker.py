@@ -1,86 +1,90 @@
-"""
-src/extract_worker.py
-=====================
-Unified feature extraction worker for multiprocessing.
+"""Process-safe worker entrypoint for feature extraction v2."""
 
-Reads one .npy file from disk, feeds it to all 4 feature groups,
-and returns a flat dict of 33 features + metadata.
-
-This module exists as a standalone file (not inline in a notebook)
-because Windows ProcessPoolExecutor uses 'spawn' start method,
-which requires worker functions to be importable from a module.
-"""
 from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
-from src.feature_extraction.frequency import (
-    FEATURE_KEYS as FREQ_KEYS,
-    extract_frequency_features,
-)
-from src.feature_extraction.color import (
-    FEATURE_KEYS as COLOR_KEYS,
-    extract_color_features,
-)
-from src.feature_extraction.microtexture import (
-    FEATURE_KEYS as MICRO_KEYS,
-    extract_microtexture_features,
-)
-from src.feature_extraction.spatial import (
-    FEATURE_KEYS as SPATIAL_KEYS,
-    extract_spatial_features,
-)
-
-ALL_FEATURE_KEYS: list[str] = (
-    list(FREQ_KEYS) + list(COLOR_KEYS) + list(MICRO_KEYS) + list(SPATIAL_KEYS)
-)
-"""All 33 feature keys in canonical order."""
+from .cfa import extract_conditional_cfa_features
+from .color import extract_color_features
+from .constants import DEFAULT_CONFIG, FeatureExtractionConfig, feature_keys
+from .frequency import extract_frequency_features
+from .hetero import extract_dark_hetero_features
+from .microtexture import extract_microtexture_features
+from .spatial import extract_spatial_features
+from .types import FeatureExtractionResult, FeatureExtractionStatus
+from .views import FeatureContext
+from .wavelet import extract_wavelet_features
 
 
-def extract_all_features(task: tuple[str, str, str]) -> dict:
-    """Process one .npy file through all 4 feature groups.
+ALL_FEATURE_KEYS = feature_keys(DEFAULT_CONFIG)
 
-    Designed to run inside a child process via ProcessPoolExecutor.
 
-    Parameters
-    ----------
-    task : (npy_path, generator, label)
+def _extract_with_config(patch: np.ndarray, config: FeatureExtractionConfig) -> dict[str, float]:
+    ctx = FeatureContext(patch)
+    features: dict[str, float] = {}
+    features.update(extract_frequency_features(ctx))
+    features.update(extract_color_features(ctx))
+    features.update(extract_spatial_features(ctx))
+    if config.include_conditional:
+        features.update(extract_conditional_cfa_features(ctx))
+    if config.include_research:
+        features.update(extract_wavelet_features(ctx))
+        features.update(extract_dark_hetero_features(ctx))
+        features.update(extract_microtexture_features(ctx))
+    return features
 
-    Returns
-    -------
-    dict
-        Flat record with: file_path, generator, label,
-        33 feature columns, status, error.
-    """
-    npy_path, generator, label = task
-    record: dict = {
-        "file_path": npy_path,
-        "generator": generator,
-        "label": label,
-    }
+
+def extract_all_features(task: tuple[Any, ...]) -> FeatureExtractionResult:
+    (
+        row_id,
+        source_file_path,
+        patch_path,
+        generator,
+        label,
+        split_role,
+        dataset_name,
+        preprocess_version,
+        feature_version,
+        include_conditional,
+        include_research,
+    ) = task
+    config = FeatureExtractionConfig(
+        feature_version=feature_version,
+        include_conditional=bool(include_conditional),
+        include_research=bool(include_research),
+    )
     try:
-        # Single disk read — feeds all 4 extractors
-        arr = np.load(npy_path, allow_pickle=False)
-
-        # Group 1: Frequency (6 features, guaranteed finite)
-        record.update(extract_frequency_features(arr))
-
-        # Group 2: Color (9 features, guaranteed finite)
-        record.update(extract_color_features(arr))
-
-        # Group 3: Microtexture (10 features, guaranteed finite)
-        record.update(extract_microtexture_features(arr))
-
-        # Group 4: Spatial (8 features, may contain NaN)
-        record.update(extract_spatial_features(arr))
-
-        record["status"] = "ok"
-        record["error"] = ""
-
+        patch = np.load(Path(patch_path), allow_pickle=False)
+        features = _extract_with_config(patch, config)
+        return FeatureExtractionResult(
+            row_id=row_id,
+            source_file_path=source_file_path,
+            patch_path=patch_path,
+            generator=generator,
+            label=label,
+            split_role=split_role,
+            dataset_name=dataset_name,
+            preprocess_version=preprocess_version,
+            feature_version=feature_version,
+            status=FeatureExtractionStatus.OK,
+            features=features,
+        )
     except Exception as exc:
-        for key in ALL_FEATURE_KEYS:
-            record[key] = np.nan
-        record["status"] = "error"
-        record["error"] = str(exc)
-
-    return record
+        empty = {key: np.nan for key in feature_keys(config)}
+        return FeatureExtractionResult(
+            row_id=row_id,
+            source_file_path=source_file_path,
+            patch_path=patch_path,
+            generator=generator,
+            label=label,
+            split_role=split_role,
+            dataset_name=dataset_name,
+            preprocess_version=preprocess_version,
+            feature_version=feature_version,
+            status=FeatureExtractionStatus.ERROR,
+            error=f"{type(exc).__name__}: {exc}",
+            features=empty,
+        )
