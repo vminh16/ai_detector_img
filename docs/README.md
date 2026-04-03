@@ -34,6 +34,10 @@
   - validation moi nhat tren `old_v1` vs `v4_exact`
   - bo sung diagnostics ve SLA mapping, shift redundancy, control generalization, cross-noise pathology, va framing `multi-feature + conditional branches`
 
+- `reports/training_v2_baseline_20260403.md`
+  - benchmark training baseline dau tien tren full feature table v2
+  - ket luan quan trong: clean baseline manh, nhung selected model van phu thuoc vao cac family chua du nuisance-audit
+
 - `reports/feature_spec_v1_validation.md`
   - bao cao validation truoc do
   - giu lai de doi chieu lich su ra quyet dinh

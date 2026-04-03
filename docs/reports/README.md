@@ -17,6 +17,11 @@
   - bo sung diagnostics rieng cho SLA mapping, shift redundancy, control generalization, va cross-noise evaluation pathology
   - la bang chung chinh de khoa `feature_extraction_standard_v2.md`
 
+- `training_v2_baseline_20260403.md`
+  - benchmark baseline dau tien tren full feature table `v2_rgb248_exact`
+  - chot rang co the train baseline ngay, nhung chua du bang chung de goi la champion-safe
+  - chi ra `full_v2__lightgbm` dang phu thuoc manh vao `Y-SRM`, `CFA`, `wavelet`
+
 ## Historical / supporting reports
 
 - `feature_spec_v1_validation.md`

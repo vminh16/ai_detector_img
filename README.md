@@ -18,6 +18,7 @@
 
 - `src/preprocessing/`: pipeline tiền xử lý canonical.
 - `src/feature_extraction/`: 4 nhóm handcrafted features và worker trích xuất.
+- `src/training/`: benchmark/training baseline, calibration, metric và selection logic cho stack v2.
 - `src/visualization/`: hàm debug/plot bám theo từng nhóm feature.
 - `src/dataset_tools/`: công cụ làm sạch dữ liệu, strip metadata, chuyển đổi định dạng.
 
@@ -26,6 +27,7 @@
 - `script/audit/`: audit dữ liệu và metadata.
 - `script/validation/`: script kiểm định giả thuyết/pipeline.
 - `script/studies/`: study mở rộng feature space hoặc hướng nghiên cứu mới.
+- `script/notebooks/`: builder và executor để tái sinh notebook theo pipeline mới.
 
 ## Cây tài liệu
 
@@ -42,6 +44,7 @@
 - `docs/reports/feature_space_update.md`: báo cáo hợp nhất về mở rộng feature space, với kết luận ưu tiên khối CFA trước.
 - `docs/reports/feature_spec_v0_review.md`: review mới cho spec feature v0, gồm thực nghiệm JPEG history, patch aggregation, và khuyến nghị mở rộng feature family.
 - `docs/reports/feature_spec_v2_validation.md`: validation mới nhất trên cùng tập ảnh qua pipeline cũ và mới, có thêm diagnostics cho SLA mapping, shift redundancy, control generalization, cross-noise pathology, và framing `multi-feature + conditional branches`.
+- `docs/reports/training_v2_baseline_20260403.md`: benchmark training baseline đầu tiên trên full feature table v2; xác nhận có thể train baseline ngay nhưng chưa đủ bằng chứng để gọi selected model là champion-safe.
 
 ## Nguyên tắc tổ chức
 
