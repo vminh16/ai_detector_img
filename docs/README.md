@@ -1,54 +1,66 @@
-# Documentation Map
+# Bản đồ tài liệu của nhánh thực nghiệm
 
-## Cau truc
+Thư mục `docs/` được tổ chức theo ba lớp:
 
 - `specs/`
-  - dac ta ky thuat dang co hieu luc hoac dang la ban nhap chinh thuc cho pha tiep theo
+  - mô tả hệ thống **đang phải chạy như thế nào**
 - `reports/`
-  - bao cao validation, phan bien, va tong hop bang chung
+  - giải thích **vì sao** các quyết định hiện tại được chọn
 - `reference/`
-  - tai lieu legacy va tham khao lich su
+  - tài liệu legacy và vật liệu lịch sử của dự án trước khi tái cấu trúc
 
-## Specs nen doc truoc
+## 1. Nếu chỉ đọc bốn tài liệu để hiểu toàn nhánh
 
-- `specs/preprocessing_pipeline_standard_v4.md`
-  - source-of-truth cho preprocessing core hien tai
+1. [reports/branch_experiment_overview.md](reports/branch_experiment_overview.md)
+2. [specs/preprocessing_standard.md](specs/preprocessing_standard.md)
+3. [specs/feature_extraction_standard.md](specs/feature_extraction_standard.md)
+4. [specs/training_evaluation_standard.md](specs/training_evaluation_standard.md)
 
-- `specs/feature_extraction_standard_v2.md`
-  - source-of-truth moi nhat cho feature extraction
-  - chot inventory feature v2, taxonomy `always-on / conditional / research-only / drop`, va huong fusion phi tuyen
+Đây là bộ tài liệu ngắn nhất nhưng đủ để nắm:
 
-- `specs/feature_extraction_standard_v1.md`
-  - spec active truoc do
-  - giu lai de doi chieu lap luan va migration sang v2
+- bài toán của dự án là gì,
+- nhánh hiện tại đang ở đâu,
+- vì sao từng pha được thiết kế như vậy,
+- và bước tiếp theo là gì.
 
-## Reports quan trong
+## 2. Đường đọc theo từng pha
 
-- `reports/shortcut_risk_validation.md`
-  - bao cao shortcut, compression history, geometry confound, va preprocessing risk
+### Tiền xử lý
 
-- `reports/feature_space_update.md`
-  - bao cao gioi han baseline 33 feature va huong mo rong feature space
+- spec active: [specs/preprocessing_standard.md](specs/preprocessing_standard.md)
+- report active: [reports/preprocessing_validation_summary.md](reports/preprocessing_validation_summary.md)
+- tài liệu versioned hỗ trợ: [specs/preprocessing_pipeline_standard_v4.md](specs/preprocessing_pipeline_standard_v4.md)
 
-- `reports/feature_spec_v2_validation.md`
-  - validation moi nhat tren `old_v1` vs `v4_exact`
-  - bo sung diagnostics ve SLA mapping, shift redundancy, control generalization, cross-noise pathology, va framing `multi-feature + conditional branches`
+### Trích chọn đặc trưng
 
-- `reports/training_v2_baseline_20260403.md`
-  - benchmark training baseline dau tien tren full feature table v2
-  - ket luan quan trong: clean baseline manh, nhung selected model van phu thuoc vao cac family chua du nuisance-audit
+- spec active: [specs/feature_extraction_standard.md](specs/feature_extraction_standard.md)
+- report active: [reports/feature_space_validation_summary.md](reports/feature_space_validation_summary.md)
+- tài liệu versioned hỗ trợ:
+  - [specs/feature_extraction_standard_v2.md](specs/feature_extraction_standard_v2.md)
+  - [reports/feature_spec_v2_validation.md](reports/feature_spec_v2_validation.md)
 
-- `reports/feature_spec_v1_validation.md`
-  - bao cao validation truoc do
-  - giu lai de doi chieu lich su ra quyet dinh
+### Huấn luyện và đánh giá
 
-- `reports/feature_spec_v0_review.md`
-  - review trung gian truoc vong validation moi nhat
-  - giu lai de doi chieu cac gia thuyet mo rong feature space va patch aggregation
+- spec active: [specs/training_evaluation_standard.md](specs/training_evaluation_standard.md)
+- report active: [reports/training_baseline_validation.md](reports/training_baseline_validation.md)
+- tài liệu versioned hỗ trợ: [reports/training_v2_baseline_20260403.md](reports/training_v2_baseline_20260403.md)
 
-## Luu y quan tri tai lieu
+## 3. Vai trò của thư mục `reference/`
 
-- `specs/` tra loi cau hoi "phai lam gi"
-- `reports/` tra loi cau hoi "vi sao"
-- `reference/` chi giu gia tri tham khao lich su
-- `specs/preprocessing_pipeline_standard.md` duoc giu lai de doi chieu, nhung khong con la active spec cho champion path
+`reference/` không còn là source-of-truth.
+
+Nó chỉ giữ:
+
+- spec/ghi chú cũ
+- giả định ban đầu của pipeline legacy
+- tài liệu nền dùng để đối chiếu các quyết định tái cấu trúc
+
+Nếu cần triển khai hay đánh giá hệ hiện tại, không đọc `reference/` trước.
+Hãy đọc `reports/` và `specs/` active trước.
+
+## 4. Quy ước tài liệu trong nhánh này
+
+- tài liệu active viết bằng tiếng Việt, có dấu đầy đủ
+- mỗi tài liệu phải có vai trò rõ ràng, không gộp toàn bộ dự án vào một file duy nhất
+- file versioned giữ lại để truy vết lịch sử quyết định
+- artifact số liệu và notebook output không nằm trong `docs/`; chúng nằm ở `audit_output/`, `features/`, `models/`

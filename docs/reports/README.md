@@ -1,39 +1,50 @@
-# Reports Map
+# Bản đồ báo cáo
 
-`docs/reports/` chua cac bao cao phan tich, validation, va tong hop bang chung.
+`docs/reports/` chứa các báo cáo giải thích **vì sao** nhánh hiện tại được thiết kế như vậy.
 
-## Current reports
+## 1. Bộ báo cáo active nên đọc trước
 
-- `shortcut_risk_validation.md`
-  - bao cao hop nhat ve shortcut, compression history, geometry confound, chroma canonicalization, va cac phan quyet preprocessing
+- [branch_experiment_overview.md](branch_experiment_overview.md)
+  - báo cáo tổng quan của toàn nhánh
+  - phù hợp nhất cho người mới vào dự án
+  - giải thích mục tiêu, timeline, trạng thái từng pha và các quyết định kỹ thuật lớn
 
-- `feature_space_update.md`
-  - bao cao tong hop ve gioi han cua baseline 33-feature stack va huong mo rong feature space
-  - ket luan thuc dung hien tai: uu tien CFA periodicity, wavelet co chon loc, NLF chi o muc nghien cuu
+- [preprocessing_validation_summary.md](preprocessing_validation_summary.md)
+  - báo cáo hợp nhất cho pha tiền xử lý
+  - giải thích vì sao `v4_exact` được chọn và vì sao các hướng như padding/resize/JPEG bottleneck/chroma canonicalization bị loại
 
-- `feature_spec_v2_validation.md`
-  - validation moi nhat cho spec feature
-  - bo sung study tren `Y-SRM` masking, local heteroskedasticity, edge consistency, resampling periodicity
-  - bo sung diagnostics rieng cho SLA mapping, shift redundancy, control generalization, va cross-noise evaluation pathology
-  - la bang chung chinh de khoa `feature_extraction_standard_v2.md`
+- [feature_space_validation_summary.md](feature_space_validation_summary.md)
+  - báo cáo hợp nhất cho pha feature
+  - giải thích vì sao stack 33 feature cũ không đủ, vì sao phải chuyển sang kiến trúc nhiều nhánh, và cơ sở của taxonomy hiện tại
 
-- `training_v2_baseline_20260403.md`
-  - benchmark baseline dau tien tren full feature table `v2_rgb248_exact`
-  - chot rang co the train baseline ngay, nhung chua du bang chung de goi la champion-safe
-  - chi ra `full_v2__lightgbm` dang phu thuoc manh vao `Y-SRM`, `CFA`, `wavelet`
+- [training_baseline_validation.md](training_baseline_validation.md)
+  - báo cáo hợp nhất cho training baseline
+  - giải thích selected baseline hiện tại mạnh ở đâu, nguy hiểm ở đâu, và vì sao chưa được gọi là champion-safe
 
-## Historical / supporting reports
+## 2. Các báo cáo versioned / historical support
 
-- `feature_spec_v1_validation.md`
-  - validation truoc do tren `old_v1` vs `v4_exact`
-  - giu lai de doi chieu su thay doi trong taxonomy
+Các file dưới đây vẫn được giữ lại vì giá trị lịch sử, đối chiếu và chứng minh chi tiết hơn theo từng vòng nghiên cứu:
 
-- `feature_spec_v0_review.md`
-  - review trung gian cho `spec_feature_extract_v0`
-  - giu lai de tham khao patch aggregation va cac huong mo rong som
+- [shortcut_risk_validation.md](shortcut_risk_validation.md)
+- [feature_space_update.md](feature_space_update.md)
+- [feature_spec_v0_review.md](feature_spec_v0_review.md)
+- [feature_spec_v1_validation.md](feature_spec_v1_validation.md)
+- [feature_spec_v2_validation.md](feature_spec_v2_validation.md)
+- [training_v2_baseline_20260403.md](training_v2_baseline_20260403.md)
 
-## Nguyen tac
+## 3. Thứ tự đọc khuyến nghị
 
-- `reports/` tra loi cau hoi "vi sao"
-- `specs/` tra loi cau hoi "phai lam gi"
-- Artifact so lieu, CSV, parquet, JSON metric khong de trong `reports/`; chung nam o `audit_output/`
+Người mới nên đọc:
+
+1. [branch_experiment_overview.md](branch_experiment_overview.md)
+2. [preprocessing_validation_summary.md](preprocessing_validation_summary.md)
+3. [feature_space_validation_summary.md](feature_space_validation_summary.md)
+4. [training_baseline_validation.md](training_baseline_validation.md)
+
+Khi cần truy vết chi tiết của từng vòng phản biện/validation, mới quay sang nhóm `historical support`.
+
+## 4. Nguyên tắc quản trị
+
+- report active phải trả lời câu hỏi “vì sao thiết kế hiện tại được chọn”
+- report historical giữ vai trò bằng chứng chi tiết và lịch sử tranh luận
+- artifact số liệu không nằm trong `docs/reports/`; chúng nằm ở `audit_output/`

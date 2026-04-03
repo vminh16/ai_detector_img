@@ -37,18 +37,28 @@
 
 ## Tài liệu nên đọc trước
 
-- `docs/specs/preprocessing_pipeline_standard_v4.md`: chuẩn preprocessing hiện hành theo hướng geometry-safe exact crop, support gate và fail-closed input contract.
-- `docs/specs/feature_extraction_standard_v2.md`: source-of-truth hiện tại cho phase feature extraction; chốt inventory feature v2, taxonomy `always-on / conditional / research-only / drop`, và hướng `multi-branch + nonlinear fusion`.
-- `docs/specs/feature_extraction_standard_v1.md`: spec active trước đó, giữ lại để đối chiếu quyết định.
-- `docs/reports/shortcut_risk_validation.md`: báo cáo risk hợp nhất, gồm shortcut, compression history, giới hạn lý thuyết và phán quyết cuối cho preprocessing policy.
-- `docs/reports/feature_space_update.md`: báo cáo hợp nhất về mở rộng feature space, với kết luận ưu tiên khối CFA trước.
-- `docs/reports/feature_spec_v0_review.md`: review mới cho spec feature v0, gồm thực nghiệm JPEG history, patch aggregation, và khuyến nghị mở rộng feature family.
-- `docs/reports/feature_spec_v2_validation.md`: validation mới nhất trên cùng tập ảnh qua pipeline cũ và mới, có thêm diagnostics cho SLA mapping, shift redundancy, control generalization, cross-noise pathology, và framing `multi-feature + conditional branches`.
-- `docs/reports/training_v2_baseline_20260403.md`: benchmark training baseline đầu tiên trên full feature table v2; xác nhận có thể train baseline ngay nhưng chưa đủ bằng chứng để gọi selected model là champion-safe.
+Nếu muốn hiểu nhanh toàn bộ nhánh thực nghiệm hiện tại, nên đọc theo thứ tự sau:
+
+1. `docs/reports/branch_experiment_overview.md`
+   - tổng quan nhánh, timeline, trạng thái từng pha và câu hỏi khoa học cốt lõi
+2. `docs/specs/preprocessing_standard.md`
+   - đặc tả tiền xử lý active
+3. `docs/specs/feature_extraction_standard.md`
+   - đặc tả feature extraction active
+4. `docs/specs/training_evaluation_standard.md`
+   - đặc tả training/evaluation active
+5. `docs/reports/preprocessing_validation_summary.md`
+   - báo cáo vì sao `v4_exact` được chọn
+6. `docs/reports/feature_space_validation_summary.md`
+   - báo cáo vì sao feature space phải chuyển sang kiến trúc nhiều nhánh
+7. `docs/reports/training_baseline_validation.md`
+   - báo cáo baseline training hiện tại và các rủi ro còn lại
 
 ## Nguyên tắc tổ chức
 
 - Runtime code giữ nguyên ở `src/`, `inference/`, `deploy/`; không trộn với tài liệu nghiên cứu.
 - Tài liệu quyết định kỹ thuật phải nằm trong `docs/specs/` hoặc `docs/reports/`, không để ở root.
 - Artifact số liệu phải nằm trong `audit_output/`, không gắn lẫn vào notebook hay markdown mô tả.
+- `docs/specs/` chứa source-of-truth active; các file versioned cũ được giữ lại như historical support.
+- `docs/reports/` chứa cả bộ report active đã hợp nhất và các report historical để truy vết quyết định.
 - Dữ liệu, feature tables, model artifacts và validation outputs là generated artifacts; README và ignore rules phải làm rõ đâu là source-of-truth, đâu là output sinh ra.

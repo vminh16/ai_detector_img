@@ -1,5 +1,10 @@
 # Preprocessing Pipeline Standard v4
 
+> Ghi chú trạng thái:
+> Đây là bản đặc tả versioned chi tiết của quyết định `v4_exact`.
+> Source-of-truth active hiện tại của pha tiền xử lý là
+> [preprocessing_standard.md](preprocessing_standard.md).
+
 ## 1. Mục tiêu và bất biến
 
 Spec này thay thế bản v3 bằng một contract chặt hơn ở cả hai tầng:
