@@ -3,7 +3,7 @@
 > Ghi chú trạng thái:
 > Đây là báo cáo versioned của vòng baseline ngày `2026-04-03`.
 > Report active đã hợp nhất của pha training hiện nằm ở
-> [training_baseline_validation.md](training_baseline_validation.md).
+> [training_baseline_validation.md](../active/training_baseline_validation.md).
 
 ## Mục tiêu
 

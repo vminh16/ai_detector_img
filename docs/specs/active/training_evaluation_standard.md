@@ -12,8 +12,8 @@ Phiên bản triển khai hiện tại:
 
 Tài liệu này hợp nhất:
 
-- [training_v2_baseline_20260403.md](../reports/training_v2_baseline_20260403.md)
-- [training_baseline_validation.md](../reports/training_baseline_validation.md)
+- [training_v2_baseline_20260403.md](../../reports/archive/training_v2_baseline_20260403.md)
+- [training_baseline_validation.md](../../reports/active/training_baseline_validation.md)
 
 ## 2. Mục tiêu của pha này
 

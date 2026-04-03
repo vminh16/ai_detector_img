@@ -3,7 +3,7 @@
 > Ghi chú trạng thái:
 > Đây là bản đặc tả versioned chi tiết của taxonomy feature `v2`.
 > Source-of-truth active hiện tại của pha feature extraction là
-> [feature_extraction_standard.md](feature_extraction_standard.md).
+> [feature_extraction_standard.md](../active/feature_extraction_standard.md).
 
 ## 1. Trạng thái
 

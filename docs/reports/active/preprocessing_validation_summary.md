@@ -11,7 +11,7 @@ Báo cáo này trả lời ba câu hỏi:
 Tài liệu này hợp nhất tinh thần và kết luận quan trọng từ:
 
 - [shortcut_risk_validation.md](shortcut_risk_validation.md)
-- [preprocessing_pipeline_standard_v4.md](../specs/preprocessing_pipeline_standard_v4.md)
+- [preprocessing_pipeline_standard_v4.md](../../specs/archive/preprocessing_pipeline_standard_v4.md)
 - các audit trong [audit_output/validation/spec_v4_20260319](C:/Users/USER/Desktop/ai_detector_img/audit_output/validation/spec_v4_20260319)
 
 ## 2. Bài toán gốc của pha tiền xử lý

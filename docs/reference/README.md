@@ -13,7 +13,7 @@ Thu muc `legacy_text/` giu:
 ## Cach su dung
 
 - duoc dung de doi chieu va giai thich lich su ra quyet dinh
-- khong duoc dung lam source-of-truth ky thuat neu no mau thuan voi `docs/specs/`
+- khong duoc dung lam source-of-truth ky thuat neu no mau thuan voi `docs/specs/active/`
 
 ## Luu y
 

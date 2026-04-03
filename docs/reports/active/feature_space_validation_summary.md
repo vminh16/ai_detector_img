@@ -14,7 +14,7 @@ Tài liệu này hợp nhất nội dung quan trọng từ:
 - [feature_spec_v0_review.md](feature_spec_v0_review.md)
 - [feature_spec_v1_validation.md](feature_spec_v1_validation.md)
 - [feature_spec_v2_validation.md](feature_spec_v2_validation.md)
-- [feature_extraction_standard_v2.md](../specs/feature_extraction_standard_v2.md)
+- [feature_extraction_standard_v2.md](../../specs/archive/feature_extraction_standard_v2.md)
 
 ## 2. Vấn đề của baseline 33-feature cũ
 

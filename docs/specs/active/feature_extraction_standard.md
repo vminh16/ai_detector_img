@@ -12,9 +12,9 @@ Phiên bản triển khai hiện tại:
 
 Tài liệu này hợp nhất nội dung thiết kế active từ:
 
-- [feature_extraction_standard_v2.md](feature_extraction_standard_v2.md)
-- [feature_space_validation_summary.md](../reports/feature_space_validation_summary.md)
-- [training_baseline_validation.md](../reports/training_baseline_validation.md)
+- [feature_extraction_standard_v2.md](../archive/feature_extraction_standard_v2.md)
+- [feature_space_validation_summary.md](../../reports/active/feature_space_validation_summary.md)
+- [training_baseline_validation.md](../../reports/active/training_baseline_validation.md)
 
 ## 2. Mục tiêu của pha này
 

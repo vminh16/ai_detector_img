@@ -3,7 +3,7 @@
 > Ghi chú trạng thái:
 > Đây là bản đặc tả versioned chi tiết của quyết định `v4_exact`.
 > Source-of-truth active hiện tại của pha tiền xử lý là
-> [preprocessing_standard.md](preprocessing_standard.md).
+> [preprocessing_standard.md](../active/preprocessing_standard.md).
 
 ## 1. Mục tiêu và bất biến
 

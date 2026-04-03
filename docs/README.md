@@ -11,10 +11,10 @@ Thư mục `docs/` được tổ chức theo ba lớp:
 
 ## 1. Nếu chỉ đọc bốn tài liệu để hiểu toàn nhánh
 
-1. [reports/branch_experiment_overview.md](reports/branch_experiment_overview.md)
-2. [specs/preprocessing_standard.md](specs/preprocessing_standard.md)
-3. [specs/feature_extraction_standard.md](specs/feature_extraction_standard.md)
-4. [specs/training_evaluation_standard.md](specs/training_evaluation_standard.md)
+1. [reports/active/branch_experiment_overview.md](reports/active/branch_experiment_overview.md)
+2. [specs/active/preprocessing_standard.md](specs/active/preprocessing_standard.md)
+3. [specs/active/feature_extraction_standard.md](specs/active/feature_extraction_standard.md)
+4. [specs/active/training_evaluation_standard.md](specs/active/training_evaluation_standard.md)
 
 Đây là bộ tài liệu ngắn nhất nhưng đủ để nắm:
 
@@ -27,23 +27,23 @@ Thư mục `docs/` được tổ chức theo ba lớp:
 
 ### Tiền xử lý
 
-- spec active: [specs/preprocessing_standard.md](specs/preprocessing_standard.md)
-- report active: [reports/preprocessing_validation_summary.md](reports/preprocessing_validation_summary.md)
-- tài liệu versioned hỗ trợ: [specs/preprocessing_pipeline_standard_v4.md](specs/preprocessing_pipeline_standard_v4.md)
+- spec active: [specs/active/preprocessing_standard.md](specs/active/preprocessing_standard.md)
+- report active: [reports/active/preprocessing_validation_summary.md](reports/active/preprocessing_validation_summary.md)
+- tài liệu versioned hỗ trợ: [specs/archive/preprocessing_pipeline_standard_v4.md](specs/archive/preprocessing_pipeline_standard_v4.md)
 
 ### Trích chọn đặc trưng
 
-- spec active: [specs/feature_extraction_standard.md](specs/feature_extraction_standard.md)
-- report active: [reports/feature_space_validation_summary.md](reports/feature_space_validation_summary.md)
+- spec active: [specs/active/feature_extraction_standard.md](specs/active/feature_extraction_standard.md)
+- report active: [reports/active/feature_space_validation_summary.md](reports/active/feature_space_validation_summary.md)
 - tài liệu versioned hỗ trợ:
-  - [specs/feature_extraction_standard_v2.md](specs/feature_extraction_standard_v2.md)
-  - [reports/feature_spec_v2_validation.md](reports/feature_spec_v2_validation.md)
+  - [specs/archive/feature_extraction_standard_v2.md](specs/archive/feature_extraction_standard_v2.md)
+  - [reports/archive/feature_spec_v2_validation.md](reports/archive/feature_spec_v2_validation.md)
 
 ### Huấn luyện và đánh giá
 
-- spec active: [specs/training_evaluation_standard.md](specs/training_evaluation_standard.md)
-- report active: [reports/training_baseline_validation.md](reports/training_baseline_validation.md)
-- tài liệu versioned hỗ trợ: [reports/training_v2_baseline_20260403.md](reports/training_v2_baseline_20260403.md)
+- spec active: [specs/active/training_evaluation_standard.md](specs/active/training_evaluation_standard.md)
+- report active: [reports/active/training_baseline_validation.md](reports/active/training_baseline_validation.md)
+- tài liệu versioned hỗ trợ: [reports/archive/training_v2_baseline_20260403.md](reports/archive/training_v2_baseline_20260403.md)
 
 ## 3. Vai trò của thư mục `reference/`
 

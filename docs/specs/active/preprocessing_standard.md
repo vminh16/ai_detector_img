@@ -12,8 +12,8 @@ Phiên bản triển khai hiện tại:
 
 Tài liệu này tổng hợp và chuẩn hóa nội dung từ:
 
-- [preprocessing_pipeline_standard_v4.md](preprocessing_pipeline_standard_v4.md)
-- [preprocessing_validation_summary.md](../reports/preprocessing_validation_summary.md)
+- [preprocessing_pipeline_standard_v4.md](../archive/preprocessing_pipeline_standard_v4.md)
+- [preprocessing_validation_summary.md](../../reports/active/preprocessing_validation_summary.md)
 
 Mục tiêu của tài liệu này là mô tả:
 

@@ -39,19 +39,19 @@
 
 Nếu muốn hiểu nhanh toàn bộ nhánh thực nghiệm hiện tại, nên đọc theo thứ tự sau:
 
-1. `docs/reports/branch_experiment_overview.md`
+1. `docs/reports/active/branch_experiment_overview.md`
    - tổng quan nhánh, timeline, trạng thái từng pha và câu hỏi khoa học cốt lõi
-2. `docs/specs/preprocessing_standard.md`
+2. `docs/specs/active/preprocessing_standard.md`
    - đặc tả tiền xử lý active
-3. `docs/specs/feature_extraction_standard.md`
+3. `docs/specs/active/feature_extraction_standard.md`
    - đặc tả feature extraction active
-4. `docs/specs/training_evaluation_standard.md`
+4. `docs/specs/active/training_evaluation_standard.md`
    - đặc tả training/evaluation active
-5. `docs/reports/preprocessing_validation_summary.md`
+5. `docs/reports/active/preprocessing_validation_summary.md`
    - báo cáo vì sao `v4_exact` được chọn
-6. `docs/reports/feature_space_validation_summary.md`
+6. `docs/reports/active/feature_space_validation_summary.md`
    - báo cáo vì sao feature space phải chuyển sang kiến trúc nhiều nhánh
-7. `docs/reports/training_baseline_validation.md`
+7. `docs/reports/active/training_baseline_validation.md`
    - báo cáo baseline training hiện tại và các rủi ro còn lại
 
 ## Nguyên tắc tổ chức

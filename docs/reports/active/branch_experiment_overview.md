@@ -27,15 +27,15 @@ Vì vậy, nhánh này được xây dựng theo hướng:
 Pipeline hiện tại của nhánh gồm ba pha chính:
 
 1. **Tiền xử lý**
-   - chuẩn hiện hành: [preprocessing_standard.md](../specs/preprocessing_standard.md)
+   - chuẩn hiện hành: [preprocessing_standard.md](../../specs/active/preprocessing_standard.md)
    - thực thi ở [src/preprocessing](C:/Users/USER/Desktop/ai_detector_img/src/preprocessing)
 
 2. **Trích chọn đặc trưng**
-   - chuẩn hiện hành: [feature_extraction_standard.md](../specs/feature_extraction_standard.md)
+   - chuẩn hiện hành: [feature_extraction_standard.md](../../specs/active/feature_extraction_standard.md)
    - thực thi ở [src/feature_extraction](C:/Users/USER/Desktop/ai_detector_img/src/feature_extraction)
 
 3. **Huấn luyện và đánh giá baseline**
-   - chuẩn hiện hành: [training_evaluation_standard.md](../specs/training_evaluation_standard.md)
+   - chuẩn hiện hành: [training_evaluation_standard.md](../../specs/active/training_evaluation_standard.md)
    - thực thi ở [src/training](C:/Users/USER/Desktop/ai_detector_img/src/training)
 
 Notebook tương ứng:
@@ -261,11 +261,11 @@ Lịch sử Git của nhánh hiện tại:
 Nếu chưa biết gì về dự án, nên đọc theo thứ tự:
 
 1. tài liệu này: [branch_experiment_overview.md](branch_experiment_overview.md)
-2. spec tiền xử lý: [preprocessing_standard.md](../specs/preprocessing_standard.md)
+2. spec tiền xử lý: [preprocessing_standard.md](../../specs/active/preprocessing_standard.md)
 3. báo cáo validation tiền xử lý: [preprocessing_validation_summary.md](preprocessing_validation_summary.md)
-4. spec feature extraction: [feature_extraction_standard.md](../specs/feature_extraction_standard.md)
+4. spec feature extraction: [feature_extraction_standard.md](../../specs/active/feature_extraction_standard.md)
 5. báo cáo validation feature: [feature_space_validation_summary.md](feature_space_validation_summary.md)
-6. spec training/eval: [training_evaluation_standard.md](../specs/training_evaluation_standard.md)
+6. spec training/eval: [training_evaluation_standard.md](../../specs/active/training_evaluation_standard.md)
 7. báo cáo training baseline: [training_baseline_validation.md](training_baseline_validation.md)
 
 ## 9. Kết luận ngắn
