@@ -1,64 +1,242 @@
-# AI Detector Image Repository
+# AI Detector Image
 
-## Cấu trúc đề xuất
+Repo nghiên cứu và tái cấu trúc pipeline phát hiện ảnh AI trên dữ liệu web in-the-wild, với trọng tâm là:
 
-- `app/`: ứng dụng phục vụ demo/API.
-- `audit_output/`: artifact sinh ra từ các đợt audit và validation, đã nhóm theo `data_audit/`, `validation/`, `studies/`.
-- `data/`: dữ liệu raw, cleaned và processed.
-- `deploy/`: mã phục vụ pipeline deploy/demo.
-- `docs/`: toàn bộ tài liệu dự án.
-- `features/`: dataset đặc trưng đã trích chọn.
-- `inference/`: pipeline suy luận và tiện ích runtime.
-- `models/`: artifact huấn luyện, tham số, checkpoint và metric.
-- `notebooks/`: notebook EDA, preprocessing, feature extraction, training/eval.
-- `script/`: script nghiên cứu, kiểm định và tái lập thí nghiệm.
-- `src/`: mã nguồn lõi đã được nhóm theo mục đích.
+- loại bỏ shortcut do `JPEG / PNG / chroma subsampling / image mode`
+- chuẩn hóa lại pha tiền xử lý và trích chọn đặc trưng
+- kiểm tra mô hình ở mức hệ thống, không chỉ nhìn `AUC` clean
 
-## Cây mã nguồn
+Trạng thái hiện tại của repo:
 
-- `src/preprocessing/`: pipeline tiền xử lý canonical.
-- `src/feature_extraction/`: 4 nhóm handcrafted features và worker trích xuất.
-- `src/training/`: benchmark/training baseline, calibration, metric và selection logic cho stack v2.
-- `src/visualization/`: hàm debug/plot bám theo từng nhóm feature.
-- `src/dataset_tools/`: công cụ làm sạch dữ liệu, strip metadata, chuyển đổi định dạng.
+- đây là **nhánh thực nghiệm đã tái cấu trúc mạnh**
+- pipeline đã chạy đủ ba pha: `preprocessing`, `feature extraction`, `training/evaluation`
+- đã có benchmark reference mạnh trên clean
+- **chưa có champion model đủ an toàn để coi là production-ready**
 
-## Cây script
+## 1. Bài toán của repo
 
-- `script/audit/`: audit dữ liệu và metadata.
-- `script/validation/`: script kiểm định giả thuyết/pipeline.
-- `script/studies/`: study mở rộng feature space hoặc hướng nghiên cứu mới.
-- `script/notebooks/`: builder và executor để tái sinh notebook theo pipeline mới.
+Bài toán cốt lõi không chỉ là phân loại `real` và `AI`.
 
-## Cây tài liệu
+Với dữ liệu ảnh web hiện tại:
 
-- `docs/specs/`: đặc tả chuẩn cần bám khi triển khai.
-- `docs/reports/`: báo cáo kiểm định, phản biện và cập nhật nghiên cứu.
-- `docs/reference/legacy_text/`: các ghi chú/spec gốc dạng `.txt` và tài liệu nền.
+- ảnh thật chủ yếu là `JPEG`
+- ảnh AI chủ yếu là `PNG`
+- nhiều đặc trưng pháp y cổ điển phản ứng trực tiếp với `compression history`
 
-## Tài liệu nên đọc trước
+Nếu pipeline làm sai, mô hình có thể đạt điểm rất cao nhưng thực chất chỉ học:
 
-Nếu muốn hiểu nhanh toàn bộ nhánh thực nghiệm hiện tại, nên đọc theo thứ tự sau:
+- định dạng ảnh
+- lịch sử nén
+- chroma subsampling
+- hoặc mode ảnh như `RGBA`, `L`
 
-1. `docs/reports/active/branch_experiment_overview.md`
-   - tổng quan nhánh, timeline, trạng thái từng pha và câu hỏi khoa học cốt lõi
-2. `docs/specs/active/preprocessing_standard.md`
-   - đặc tả tiền xử lý active
-3. `docs/specs/active/feature_extraction_standard.md`
-   - đặc tả feature extraction active
-4. `docs/specs/active/training_evaluation_standard.md`
-   - đặc tả training/evaluation active
-5. `docs/reports/active/preprocessing_validation_summary.md`
-   - báo cáo vì sao `v4_exact` được chọn
-6. `docs/reports/active/feature_space_validation_summary.md`
-   - báo cáo vì sao feature space phải chuyển sang kiến trúc nhiều nhánh
-7. `docs/reports/active/training_baseline_validation.md`
-   - báo cáo baseline training hiện tại và các rủi ro còn lại
+Nhánh thực nghiệm này được tạo ra để giải đúng vấn đề đó.
 
-## Nguyên tắc tổ chức
+## 2. Kết quả chính của nhánh hiện tại
 
-- Runtime code giữ nguyên ở `src/`, `inference/`, `deploy/`; không trộn với tài liệu nghiên cứu.
-- Tài liệu quyết định kỹ thuật phải nằm trong `docs/specs/` hoặc `docs/reports/`, không để ở root.
-- Artifact số liệu phải nằm trong `audit_output/`, không gắn lẫn vào notebook hay markdown mô tả.
-- `docs/specs/` chứa source-of-truth active; các file versioned cũ được giữ lại như historical support.
-- `docs/reports/` chứa cả bộ report active đã hợp nhất và các report historical để truy vết quyết định.
-- Dữ liệu, feature tables, model artifacts và validation outputs là generated artifacts; README và ignore rules phải làm rõ đâu là source-of-truth, đâu là output sinh ra.
+### Tiền xử lý
+
+Pipeline active hiện tại là `v4_exact`:
+
+- decode canonical
+- áp EXIF orientation
+- `RGB -> RGB`
+- `RGBA -> RGB` bằng `straight-alpha composite` trên nền xám `128`
+- loại `L`, `CMYK` và mode chưa audit
+- exact crop `248x248 @ residue (4,4)`
+- không padding
+- không resize
+- không JPEG bottleneck
+- không chroma canonicalization
+
+### Trích chọn đặc trưng
+
+Feature extraction active hiện tại là `v2_rgb248_exact_multibranch`:
+
+- `always-on`
+- `conditional CFA`
+- `research branches` cho các cue còn rủi ro
+- loại bỏ các family codec-direct đã bị chứng minh là độc
+
+### Huấn luyện và đánh giá
+
+Notebook train đã chạy đủ:
+
+1. clean benchmark
+2. model-level nuisance audit (`AUC_nat`)
+3. degradation suite (`AUC_xdeg`)
+4. family ablation
+5. phase closure
+
+Model benchmark mạnh nhất hiện tại là `full_v2__lightgbm`, nhưng chưa được coi là champion vì:
+
+- `AUC_nat_abs` vẫn còn cao
+- sụp mạnh dưới `resize-heavy degradation`
+- còn phụ thuộc nhiều vào các branch điều kiện / research
+
+## 3. Cấu trúc repo
+
+```text
+app/          demo/API đơn giản
+deploy/       pipeline chạy suy luận / phục vụ demo
+docs/         đặc tả, báo cáo, tài liệu tham khảo
+inference/    runtime inference cũ và công cụ liên quan
+notebooks/    notebook theo từng pha
+script/       script audit, validation, studies, notebook builders
+src/          mã nguồn lõi đã tái cấu trúc
+```
+
+Các thư mục quan trọng trong `src/`:
+
+- `src/preprocessing/`: pipeline tiền xử lý canonical
+- `src/feature_extraction/`: pipeline trích chọn đặc trưng nhiều nhánh
+- `src/training/`: benchmark, calibration, nuisance audit, degradation suite
+- `src/visualization/`: hàm trực quan hóa theo từng pha
+- `src/dataset_tools/`: tiện ích xử lý dữ liệu
+
+## 4. Tài liệu nên đọc trước
+
+Nếu muốn hiểu nhanh toàn bộ repo, nên đọc theo thứ tự:
+
+1. [docs/reports/active/branch_experiment_overview.md](docs/reports/active/branch_experiment_overview.md)
+2. [docs/specs/active/preprocessing_standard.md](docs/specs/active/preprocessing_standard.md)
+3. [docs/specs/active/feature_extraction_standard.md](docs/specs/active/feature_extraction_standard.md)
+4. [docs/specs/active/training_evaluation_standard.md](docs/specs/active/training_evaluation_standard.md)
+5. [docs/reports/active/preprocessing_validation_summary.md](docs/reports/active/preprocessing_validation_summary.md)
+6. [docs/reports/active/feature_space_validation_summary.md](docs/reports/active/feature_space_validation_summary.md)
+7. [docs/reports/active/training_baseline_validation.md](docs/reports/active/training_baseline_validation.md)
+
+`docs/README.md` là bản đồ tài liệu tổng quát của toàn repo.
+
+## 5. Quy trình chạy theo thứ tự
+
+### Pha 1: Tiền xử lý
+
+Notebook:
+
+- [notebooks/01_preprocessing.ipynb](notebooks/01_preprocessing.ipynb)
+
+Source-of-truth:
+
+- [src/preprocessing](src/preprocessing)
+
+Output mong đợi:
+
+- manifest canonical patch
+- patch `RGB 248x248`
+- audit preprocessing
+
+### Pha 2: Trích chọn đặc trưng
+
+Notebook:
+
+- [notebooks/02_feature_extraction.ipynb](notebooks/02_feature_extraction.ipynb)
+
+Source-of-truth:
+
+- [src/feature_extraction](src/feature_extraction)
+
+Output mong đợi:
+
+- feature table `v2`
+- validation extraction
+
+### Pha 3: Huấn luyện và đánh giá
+
+Notebook:
+
+- [notebooks/03_training_eval.ipynb](notebooks/03_training_eval.ipynb)
+
+Source-of-truth:
+
+- [src/training](src/training)
+
+Output mong đợi:
+
+- clean benchmark
+- `AUC_nat`
+- degradation suite
+- family ablation
+- phase closure summary
+
+## 6. Cài đặt môi trường
+
+Repo hiện dùng Python và notebook. Cách đơn giản nhất:
+
+```bash
+pip install -r requirements.txt
+```
+
+Nếu chạy notebook, nên dùng một môi trường ảo riêng để tránh lệch phiên bản thư viện.
+
+## 7. Dữ liệu và artifact
+
+Repo này có nhiều output sinh ra từ notebook và validation:
+
+- `data/`
+- `features/`
+- `models/`
+- `audit_output/`
+
+Các thư mục này có thể rất lớn. Trong trạng thái local hiện tại:
+
+- `data/` khoảng `46 GB`
+- `audit_output/` khoảng `0.24 GB`
+- `features/` khoảng `0.14 GB`
+- `models/` khoảng `0.10 GB`
+
+Vì vậy:
+
+- code và tài liệu là phần nên đưa lên GitHub
+- dữ liệu raw, feature tables, model binaries, và phần lớn artifact benchmark nên để local hoặc tách sang storage khác
+
+## 8. Trạng thái kỹ thuật hiện tại
+
+Repo hiện đã đạt:
+
+- preprocessing đủ chặt để không tự tạo shortcut lớn
+- feature extraction đủ ổn định để chạy full corpus
+- training notebook đủ để đóng pha benchmark ở mức hệ thống
+
+Repo hiện chưa đạt:
+
+- champion-ready model
+- deploy-ready threshold
+- bằng chứng cho thấy model đã thoát khỏi `compression history`
+
+Điểm nghẽn hiện tại là:
+
+- `AUC_nat` vẫn cao
+- resize làm model sụp mạnh
+- các branch utility cao nhất vẫn là các branch nhạy rủi ro
+
+## 9. Repo này phù hợp để làm gì
+
+Phù hợp:
+
+- nghiên cứu forensic pipeline cho ảnh AI
+- đọc lại toàn bộ reasoning từ preprocessing tới training
+- tái lập benchmark và các study trong repo
+- tiếp tục phát triển branch feature/model tiếp theo
+
+Không phù hợp:
+
+- dùng ngay như một detector production
+- suy diễn rằng clean `AUC` cao là đủ an toàn
+
+## 10. Ghi chú khi đưa lên GitHub cá nhân
+
+Khuyến nghị:
+
+- đẩy phần `code + docs + notebooks + scripts`
+- không đẩy `data/`, model binaries, feature tables và toàn bộ artifact sinh ra
+- mô tả rõ trong README rằng đây là repo nghiên cứu, không phải bản release production
+
+Nếu muốn public repo:
+
+- nên giữ `docs/specs/active/` và `docs/reports/active/` làm source-of-truth
+- phần `archive/` giữ lại để người đọc truy vết lịch sử quyết định
+
+## 11. Giấy phép
+
+Repo hiện chưa khai báo `LICENSE`. Nếu định public lâu dài, nên thêm giấy phép phù hợp trước khi công khai.

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier
@@ -26,6 +28,7 @@ from .constants import (
     MODEL_SPECS,
     TARGET_FPR,
 )
+from .feature_audit import run_feature_shortcut_audit
 from .metrics import auc_bootstrap_ci, safe_logit, split_metrics, threshold_at_target_fpr
 from src.feature_extraction import CONDITIONAL_CFA_KEYS, FEATURE_VERSION as FEATURE_VERSION_EXPECTED
 from src.feature_extraction.constants import PREPROCESS_VERSION_EXPECTED
@@ -169,21 +172,56 @@ def split_frames(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
     return splits
 
 
+def build_cfa_gate_coverage(
+    frame: pd.DataFrame,
+    *,
+    threshold: float,
+) -> pd.DataFrame:
+    prepared = apply_conditional_cfa_threshold(frame, threshold=threshold)
+    coverage = (
+        prepared.groupby(["split_role", "label"], as_index=False)
+        .agg(
+            gate_rate=("cfa_gate_active", "mean"),
+            gate_active_count=("cfa_gate_active", "sum"),
+            rows=("cfa_gate_active", "size"),
+        )
+        .sort_values(["split_role", "label"], ignore_index=True)
+    )
+    return coverage
+
+
 def _matrix(frame: pd.DataFrame, columns: tuple[str, ...]) -> np.ndarray:
     return frame.loc[:, list(columns)].to_numpy(dtype=np.float64, copy=True)
 
 
 def train_candidates(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, FittedCandidate], float]:
+    return train_candidates_with_feature_sets(frame)
+
+
+def train_candidates_with_feature_sets(
+    frame: pd.DataFrame,
+    *,
+    feature_sets: dict[str, tuple[str, ...]] | None = None,
+    model_names: tuple[str, ...] | None = None,
+) -> tuple[pd.DataFrame, dict[str, FittedCandidate], float]:
     prepared, cfa_threshold = add_conditional_cfa_gates(frame)
     splits = split_frames(prepared)
     train_df = splits["train_core"]
     cal_df = splits["calibration"]
     val_df = splits["val"]
 
+    feature_sets = FEATURE_SET_COLUMNS if feature_sets is None else feature_sets
+    model_specs = MODEL_SPECS
+    if model_names is not None:
+        allowed = set(model_names)
+        model_specs = tuple(spec for spec in MODEL_SPECS if spec.name in allowed)
+        if not model_specs:
+            raise ValueError(f"No active MODEL_SPECS matched model_names={sorted(allowed)!r}")
+
     candidate_rows: list[dict[str, Any]] = []
     fitted: dict[str, FittedCandidate] = {}
 
-    for feature_set, columns in FEATURE_SET_COLUMNS.items():
+    for feature_set, columns in feature_sets.items():
         x_train = _matrix(train_df, columns)
         y_train = train_df["y"].to_numpy(dtype=np.int32)
         x_cal = _matrix(cal_df, columns)
@@ -191,7 +229,7 @@ def train_candidates(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Fitte
         x_val = _matrix(val_df, columns)
         y_val = val_df["y"].to_numpy(dtype=np.int32)
 
-        for spec in MODEL_SPECS:
+        for spec in model_specs:
             model = build_model(spec.name)
             model.fit(x_train, y_train)
             platt = fit_platt(raw_scores(model, x_cal), y_cal)
@@ -346,6 +384,7 @@ def save_training_artifacts(
     generator_metrics: pd.DataFrame,
     feature_importance: pd.DataFrame,
     family_importance: pd.DataFrame,
+    cfa_gate_coverage: pd.DataFrame | None,
     summary: dict[str, Any],
 ) -> dict[str, str]:
     root = Path(output_dir)
@@ -363,6 +402,10 @@ def save_training_artifacts(
     generator_metrics.to_csv(root / "selected_model_ood_by_generator.csv", index=False, encoding="utf-8-sig")
     feature_importance.to_csv(root / "selected_model_feature_importance.csv", index=False, encoding="utf-8-sig")
     family_importance.to_csv(root / "selected_model_family_importance.csv", index=False, encoding="utf-8-sig")
+    if cfa_gate_coverage is not None:
+        coverage_path = root / "cfa_gate_coverage.csv"
+        cfa_gate_coverage.to_csv(coverage_path, index=False, encoding="utf-8-sig")
+        files["cfa_gate_coverage_csv"] = str(coverage_path.resolve())
     for split_name, pred_df in prediction_frames.items():
         pred_path = root / f"predictions_{split_name}.csv"
         pred_df.to_csv(pred_path, index=False, encoding="utf-8-sig")
@@ -371,10 +414,75 @@ def save_training_artifacts(
     return files
 
 
+def save_model_parameters(
+    *,
+    output_dir: Path | str,
+    candidate: FittedCandidate,
+    threshold: float,
+    feature_table_path: Path | str,
+    feature_version: str,
+    preprocess_version: str,
+) -> dict[str, str]:
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+
+    files = {
+        "model_joblib": str((root / "selected_model.joblib").resolve()),
+        "platt_joblib": str((root / "selected_platt_calibrator.joblib").resolve()),
+        "threshold_json": str((root / "selected_threshold.json").resolve()),
+        "feature_schema_json": str((root / "selected_feature_schema.json").resolve()),
+        "manifest_json": str((root / "model_manifest.json").resolve()),
+    }
+
+    joblib.dump(candidate.model, files["model_joblib"])
+    joblib.dump(candidate.platt, files["platt_joblib"])
+
+    threshold_payload = {
+        "threshold": float(threshold),
+        "target_fpr": float(TARGET_FPR),
+        "cfa_threshold": float(candidate.cfa_threshold),
+    }
+    Path(files["threshold_json"]).write_text(
+        json.dumps(threshold_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    schema_payload = {
+        "candidate_name": candidate.candidate_name,
+        "feature_set": candidate.feature_set,
+        "model_name": candidate.model_name,
+        "feature_columns": list(candidate.feature_columns),
+    }
+    Path(files["feature_schema_json"]).write_text(
+        json.dumps(schema_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    manifest_payload = {
+        "saved_at_utc": datetime.now(timezone.utc).isoformat(),
+        "feature_table_path": str(Path(feature_table_path).resolve()),
+        "feature_version": str(feature_version),
+        "preprocess_version": str(preprocess_version),
+        "candidate_name": candidate.candidate_name,
+        "feature_set": candidate.feature_set,
+        "model_name": candidate.model_name,
+        "threshold": float(threshold),
+        "target_fpr": float(TARGET_FPR),
+        "cfa_threshold": float(candidate.cfa_threshold),
+    }
+    Path(files["manifest_json"]).write_text(
+        json.dumps(manifest_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return files
+
+
 def run_training_baseline(
     feature_table_path: Path | str,
     *,
     output_dir: Path | str,
+    model_output_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     frame = load_training_table(feature_table_path)
     candidate_frame, fitted, cfa_threshold = train_candidates(frame)
@@ -388,6 +496,7 @@ def run_training_baseline(
     )
     generator_metrics = evaluate_selected_by_generator(prediction_frames["ood_eval"])
     feature_importance, family_importance = selected_model_feature_importance(selected)
+    gate_coverage = build_cfa_gate_coverage(frame, threshold=cfa_threshold)
     summary = {
         "feature_table_path": str(Path(feature_table_path).resolve()),
         "rows": int(len(frame)),
@@ -412,8 +521,64 @@ def run_training_baseline(
         generator_metrics=generator_metrics,
         feature_importance=feature_importance,
         family_importance=family_importance,
+        cfa_gate_coverage=gate_coverage,
         summary=summary,
     )
+
+    if model_output_dir is not None:
+        model_files = save_model_parameters(
+            output_dir=model_output_dir,
+            candidate=selected,
+            threshold=threshold,
+            feature_table_path=feature_table_path,
+            feature_version=str(frame["feature_version"].iloc[0]),
+            preprocess_version=str(frame["preprocess_version"].iloc[0]),
+        )
+        summary["model_files"] = model_files
+
     summary["files"] = files
     Path(files["summary_json"]).write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    return summary
+
+
+def run_training_with_feature_audit(
+    feature_table_path: Path | str,
+    *,
+    audit_output_root: Path | str,
+    metadata_csv_path: Path | str,
+    model_output_dir: Path | str,
+) -> dict[str, Any]:
+    frame = load_training_table(feature_table_path)
+
+    root = Path(audit_output_root)
+    phase1_output_dir = root / "phase1_feature_audit"
+    phase2_output_dir = root / "phase2_training_eval"
+
+    phase1_summary = run_feature_shortcut_audit(
+        frame,
+        feature_table_path=feature_table_path,
+        metadata_csv_path=metadata_csv_path,
+        output_dir=phase1_output_dir,
+    )
+    phase2_summary = run_training_baseline(
+        feature_table_path,
+        output_dir=phase2_output_dir,
+        model_output_dir=model_output_dir,
+    )
+
+    root.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "feature_table_path": str(Path(feature_table_path).resolve()),
+        "metadata_csv_path": str(Path(metadata_csv_path).resolve()),
+        "audit_output_root": str(root.resolve()),
+        "phase1_output_dir": str(phase1_output_dir.resolve()),
+        "phase2_output_dir": str(phase2_output_dir.resolve()),
+        "model_output_dir": str(Path(model_output_dir).resolve()),
+        "phase1": phase1_summary,
+        "phase2": phase2_summary,
+        "claim_scope": "empirical",
+    }
+    summary_path = root / "two_phase_summary.json"
+    summary["summary_json"] = str(summary_path.resolve())
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     return summary

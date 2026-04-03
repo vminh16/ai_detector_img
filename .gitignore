@@ -1,14 +1,60 @@
-## Python cache
+## Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
+*.so
+
+## Build / packaging
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+## Test / coverage / type-check caches
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.nox/
+.tox/
 
 ## Notebooks
 .ipynb_checkpoints/
 
-## Local environments
+## Virtual environments
 .venv/
-.venv-1/
+.venv-*/
+venv/
+ENV/
+env/
+
+## Local environment files
+.env
+.env.*
+*.local
+
+## IDE / editor
+.vscode/
+.idea/
+*.code-workspace
+.github
+
+## OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Logs / temporary files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
 
 ## Generated audit artifacts
 audit_output/data_audit/
@@ -29,4 +75,9 @@ features/*
 
 ## Generated model artifacts
 models/03_artifacts/
+models/param/
 !models/README.md
+
+## App / demo outputs
+output/
+logs/
