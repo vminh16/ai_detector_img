@@ -1,0 +1,10 @@
+{
+  "tau_op": 0.7875160361690337,
+  "target_fpr": 0.05,
+  "actual_val_fpr": 0.05,
+  "actual_val_tpr": 0.42133333333333334,
+  "locked_on": "val",
+  "champion_model": "lgbm",
+  "champion_pipeline": "gbdt",
+  "global_seed": 42
+}

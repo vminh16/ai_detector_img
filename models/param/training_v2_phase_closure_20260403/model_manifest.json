@@ -1,0 +1,12 @@
+{
+  "saved_at_utc": "2026-04-03T09:59:56.787041+00:00",
+  "feature_table_path": "C:\\Users\\USER\\Desktop\\ai_detector_img\\features\\feature_extraction_v2_rgb248_exact.csv",
+  "feature_version": "v2_rgb248_exact_multibranch",
+  "preprocess_version": "v4_rgb248_r4_exact",
+  "candidate_name": "full_v2__lightgbm",
+  "feature_set": "full_v2",
+  "model_name": "lightgbm",
+  "threshold": 0.7074744498826763,
+  "target_fpr": 0.05,
+  "cfa_threshold": -0.5329408775144153
+}

@@ -1,18 +1,13 @@
-"""AI Image Detector — Production Inference Service.
+"""AI Image Detector — active FastAPI inference surface.
 
-Modules
--------
-config              – Centralised settings and artifact-path resolution
-errors              – Custom exception hierarchy
-schemas             – Pydantic request / response models
-validation          – Magic-byte detection and size checks
-preprocessing       – EXIF → pad → crop → JPEG bottleneck → YCrCb
-feature_vectorizer  – 33-dim feature extraction + winsorisation
-artifact_loader     – Load champion model, calibrator, and metadata
-calibration         – Platt-scaling raw score → P(AI)
-routing             – LOW / MEDIUM / HIGH triage zones
-explainer           – Top-N feature contributors
-telemetry           – Structured logging and latency tracking
-api                 – FastAPI application (POST /predict, GET /health)
-main                – Uvicorn launcher
+Active entrypoints
+------------------
+- ``inference.api``  : FastAPI app bound to the active runtime stack
+- ``inference.main`` : Uvicorn launcher for ``inference.api``
+
+Notes
+-----
+The lower-level legacy modules under ``inference/`` are kept in the repo for
+historical reference. The active web/API runtime is now implemented in
+``deploy.pipeline`` and used by both ``app.server`` and ``inference.api``.
 """

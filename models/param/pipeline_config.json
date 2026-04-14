@@ -1,0 +1,24 @@
+{
+  "tau_op": 0.7875160361690337,
+  "target_fpr": 0.05,
+  "actual_val_fpr": 0.05,
+  "actual_val_tpr": 0.42133333333333334,
+  "locked_on": "val",
+  "champion_model": "lgbm",
+  "champion_pipeline": "gbdt",
+  "global_seed": 42,
+  "champion_val_auc": 0.8413315555555556,
+  "champion_val_ap": 0.8402806102120182,
+  "champion_val_logloss": 0.48863759044937266,
+  "best_iteration": 902,
+  "total_trees": 902,
+  "all_candidates_val_auc": {
+    "lgbm": 0.8413315555555556,
+    "linear_svm": 0.7398226666666667,
+    "random_forest": 0.8047201111111111
+  },
+  "champion_joblib": "champion_lgbm.joblib",
+  "native_model_txt": "champion_lgbm_native.txt",
+  "calibrator_file": "platt_calibrator.joblib",
+  "exported_at": "2026-03-11T06:39:05.666300+00:00"
+}

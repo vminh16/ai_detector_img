@@ -75,7 +75,6 @@ features/*
 
 ## Generated model artifacts
 models/03_artifacts/
-models/param/
 !models/README.md
 
 ## App / demo outputs

@@ -46,9 +46,9 @@ fileInput.addEventListener("change", () => {
 });
 
 function handleFile(file) {
-  const allowed = ["image/jpeg", "image/png", "image/webp"];
-  if (!allowed.includes(file.type)) {
-    showError("Unsupported format. Please use JPEG, PNG, or WebP.");
+  const allowed = ["image/jpeg", "image/png"];
+  if (file.type && !allowed.includes(file.type)) {
+    showError("Unsupported format. Please use JPEG or PNG.");
     return;
   }
   if (file.size > 20 * 1024 * 1024) {
@@ -87,6 +87,10 @@ async function runPrediction(file) {
   resultSection.classList.add("hidden");
   errorSection.classList.add("hidden");
 
+  if (!clientHash) {
+    clientHash = await computeSHA256(file);
+  }
+
   const form = new FormData();
   form.append("file", file);
 
@@ -112,13 +116,15 @@ function renderResult(data) {
 
   const score = data.calibrated_score;
   $("#scoreValue").textContent = score.toFixed(4);
+  const lowThreshold = Number.isFinite(data.low_threshold) ? data.low_threshold : 0.3;
+  const operatingThreshold = Number.isFinite(data.operating_threshold) ? data.operating_threshold : 0.707474;
 
   // Gauge
   const arc = $("#gaugeArc");
   const maxLen = 251.33;
   arc.style.strokeDashoffset = maxLen * (1 - score);
-  arc.style.stroke = scoreColor(score);
-  $("#scoreValue").style.color = scoreColor(score);
+  arc.style.stroke = scoreColor(score, lowThreshold, operatingThreshold);
+  $("#scoreValue").style.color = scoreColor(score, lowThreshold, operatingThreshold);
 
   // Elapsed
   $("#elapsedTime").textContent = `${data.elapsed_ms.toFixed(0)} ms`;
@@ -207,9 +213,9 @@ function showError(msg) {
   errorSection.classList.remove("hidden");
 }
 
-function scoreColor(s) {
-  if (s < 0.3)  return "var(--green)";
-  if (s < 0.787516) return "var(--yellow)";
+function scoreColor(s, lowThreshold = 0.3, operatingThreshold = 0.707474) {
+  if (s < lowThreshold)  return "var(--green)";
+  if (s < operatingThreshold) return "var(--yellow)";
   return "var(--red)";
 }
 

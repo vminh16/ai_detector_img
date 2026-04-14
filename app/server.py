@@ -14,7 +14,6 @@ Run::
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -26,12 +25,20 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from deploy.pipeline import InferencePipeline
+from inference.errors import (
+    FeatureExtractionError,
+    ImageTooLargeError,
+    InvalidImageError,
+    ModelLoadError,
+    PreprocessingError,
+    UnsupportedFormatError,
+)
 
 logger = logging.getLogger("app.server")
 
 # ── Constants ────────────────────────────────────────────────────────
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # ── Pipeline singleton ───────────────────────────────────────────────
@@ -54,7 +61,7 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(
     title="AI Image Detector",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -74,14 +81,14 @@ async def health():
     """Quick health-check."""
     if _pipeline is None:
         raise HTTPException(503, detail="Pipeline not loaded")
-    return _pipeline.health()
+    return JSONResponse(content=_pipeline.health())
 
 
 @app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
     """Score a single uploaded image.
 
-    Accepts JPEG, PNG, or WebP.  Returns calibrated score, zone,
+    Accepts JPEG or PNG.  Returns calibrated score, zone,
     decision, top contributors, and timing info.
     """
     if _pipeline is None:
@@ -107,18 +114,24 @@ async def predict(file: UploadFile = File(...)):
                    f"Max: {MAX_UPLOAD_BYTES / 1024 / 1024:.0f} MB",
         )
 
-    # ── Integrity hash (computed client-side, verified here) ─────────
-    server_hash = hashlib.sha256(payload).hexdigest()
-
     # ── Run pipeline ─────────────────────────────────────────────────
     try:
         result = _pipeline.predict_from_bytes(payload)
+    except UnsupportedFormatError as exc:
+        raise HTTPException(415, detail=str(exc)) from exc
+    except ImageTooLargeError as exc:
+        raise HTTPException(413, detail=str(exc)) from exc
+    except (InvalidImageError, PreprocessingError) as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except (FeatureExtractionError, ModelLoadError) as exc:
+        logger.exception("Prediction failed: %s", exc)
+        raise HTTPException(500, detail=f"Prediction error: {exc}") from exc
     except Exception as exc:
         logger.exception("Prediction failed: %s", exc)
-        raise HTTPException(500, detail=f"Prediction error: {exc}")
+        raise HTTPException(500, detail="Prediction error: unexpected internal failure.") from exc
 
     resp = result.to_dict()
-    resp["server_hash"] = server_hash
+    resp["server_hash"] = result.image_hash
     resp["filename"] = file.filename or "unknown"
     return JSONResponse(content=resp)
 
