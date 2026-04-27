@@ -185,11 +185,6 @@ Các thư mục này có thể rất lớn. Trong trạng thái local hiện t�
 - `features/` khoảng `0.14 GB`
 - `models/` khoảng `0.10 GB`
 
-Vì vậy:
-
-- code và tài liệu là phần nên đưa lên GitHub
-- dữ liệu raw, feature tables, model binaries, và phần lớn artifact benchmark nên để local hoặc tách sang storage khác
-
 ## 8. Trạng thái kỹ thuật hiện tại
 
 Repo hiện đã đạt:
@@ -224,19 +219,7 @@ Không phù hợp:
 - dùng ngay như một detector production
 - suy diễn rằng clean `AUC` cao là đủ an toàn
 
-## 10. Ghi chú khi đưa lên GitHub cá nhân
 
-Khuyến nghị:
-
-- đẩy phần `code + docs + notebooks + scripts`
-- không đẩy `data/`, model binaries, feature tables và toàn bộ artifact sinh ra
-- mô tả rõ trong README rằng đây là repo nghiên cứu, không phải bản release production
-
-Nếu muốn public repo:
-
-- nên giữ `docs/specs/active/` và `docs/reports/active/` làm source-of-truth
-- phần `archive/` giữ lại để người đọc truy vết lịch sử quyết định
-
-## 11. Giấy phép
+## 10. Giấy phép
 
 Repo hiện chưa khai báo `LICENSE`. Nếu định public lâu dài, nên thêm giấy phép phù hợp trước khi công khai.
